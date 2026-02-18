@@ -1,0 +1,92 @@
+# OpenSearch Configuration for Enterprise Banking SOC Analytics
+# Multi-tier storage with ML integration and banking-specific optimizations
+
+cluster.name: banking-soc-analytics
+node.name: opensearch-analytics-${HOSTNAME}
+node.roles: [cluster_manager, data, ingest, ml]
+
+# Network and discovery
+network.host: 0.0.0.0
+http.port: 9200
+transport.port: 9300
+discovery.type: single-node
+
+# For production multi-node setup
+# discovery.seed_hosts: ["opensearch-node-1", "opensearch-node-2", "opensearch-node-3"]
+# cluster.initial_cluster_manager_nodes: ["opensearch-node-1"]
+
+# Path configuration
+path.data: /usr/share/opensearch/data
+path.logs: /usr/share/opensearch/logs
+path.repo: ["/usr/share/opensearch/snapshots"]
+
+# Memory and performance tuning for banking workloads
+bootstrap.memory_lock: true
+indices.memory.index_buffer_size: 20%
+indices.fielddata.cache.size: 40%
+indices.requests.cache.size: 2%
+
+# Banking SOC specific settings
+indices.lifecycle.history_index_enabled: true
+indices.lifecycle.poll_interval: 1m
+
+# Security configuration
+plugins.security.ssl.transport.pemcert_filepath: /usr/share/opensearch/config/certificates/opensearch.pem
+plugins.security.ssl.transport.pemkey_filepath: /usr/share/opensearch/config/certificates/opensearch-key.pem
+plugins.security.ssl.transport.pemtrustedcas_filepath: /usr/share/opensearch/config/certificates/root-ca.pem
+plugins.security.ssl.transport.enforce_hostname_verification: false
+plugins.security.ssl.http.enabled: true
+plugins.security.ssl.http.pemcert_filepath: /usr/share/opensearch/config/certificates/opensearch.pem
+plugins.security.ssl.http.pemkey_filepath: /usr/share/opensearch/config/certificates/opensearch-key.pem
+plugins.security.ssl.http.pemtrustedcas_filepath: /usr/share/opensearch/config/certificates/root-ca.pem
+plugins.security.allow_default_init_securityindex: true
+plugins.security.authcz.admin_dn: ["CN=admin,OU=Banking SOC,O=Enterprise Bank,C=US"]
+plugins.security.nodes_dn: ["CN=opensearch-analytics-*,OU=Banking SOC,O=Enterprise Bank,C=US"]
+plugins.security.audit.type: internal_opensearch
+plugins.security.enable_snapshot_restore_privilege: true
+plugins.security.check_snapshot_restore_write_privileges: true
+
+# ML Common settings for banking analytics
+plugins.ml_commons.enabled: true
+plugins.ml_commons.only_run_on_ml_node: false
+plugins.ml_commons.max_register_model_tasks: 10
+plugins.ml_commons.max_deploy_model_tasks: 10
+
+# Banking SOC audit configuration
+plugins.security.audit.enable_rest: true
+plugins.security.audit.enable_transport: true
+plugins.security.audit.resolve_bulk_requests: true
+plugins.security.audit.log_request_body: true
+plugins.security.audit.resolve_indices: true
+plugins.security.audit.exclude_sensitive_headers: true
+plugins.security.audit.ignore_users: ["kibanaserver"]
+plugins.security.audit.ignore_requests: ["SearchRequest", "indices:data/read/*"]
+
+# Index management for banking compliance
+action.auto_create_index: "+banking-soc-*,+wazuh-*,+alerts-*,-*"
+action.destructive_requires_name: true
+
+# Cross-cluster replication for DR
+# cluster.remote.compliance_backup.seeds: ["dr-opensearch-1:9300"]
+
+# Circuit breakers for stability under high load
+indices.breaker.total.use_real_memory: false
+indices.breaker.total.limit: 70%
+indices.breaker.fielddata.limit: 40%
+indices.breaker.request.limit: 40%
+
+# Thread pools for banking workload
+thread_pool.search.size: 16
+thread_pool.search.queue_size: 1000
+thread_pool.index.size: 8
+thread_pool.index.queue_size: 200
+
+# Banking-specific index templates auto-application
+index.mapping.total_fields.limit: 2000
+index.refresh_interval: 30s
+index.number_of_shards: 2
+index.number_of_replicas: 1
+
+# Monitoring and alerting
+plugins.alerting.enabled: true
+plugins.notifications.enabled: true

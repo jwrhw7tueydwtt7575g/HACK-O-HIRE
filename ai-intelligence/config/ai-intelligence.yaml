@@ -1,0 +1,296 @@
+# AI Intelligence Configuration
+# Enterprise Banking SOC - UEBA and Behavioral Analytics
+
+# Service Configuration
+service:
+  name: "banking-soc-ai-intelligence"
+  version: "1.0.0"
+  environment: "production"
+  api_port: 8000
+  metrics_port: 9090
+
+# Data Sources
+data_sources:
+  opensearch:
+    hosts: ["opensearch.analytics:9200"]
+    username: "ai_intelligence_user"
+    password: "${OPENSEARCH_AI_PASSWORD}"
+    use_ssl: true
+    verify_certs: false
+    index_patterns:
+      - "banking-soc-logs-*"
+      - "wazuh-alerts-*"
+      - "banking-analytics-*"
+    
+  redis:
+    host: "redis.cache"
+    port: 6379
+    password: "${REDIS_PASSWORD}"
+    db: 1
+    connection_pool_size: 10
+    
+  neo4j:
+    uri: "bolt://neo4j.graph:7687"
+    username: "neo4j"
+    password: "${NEO4J_PASSWORD}"
+    database: "banking_soc"
+
+# Machine Learning Configuration
+machine_learning:
+  # Isolation Forest for anomaly detection
+  isolation_forest:
+    contamination: 0.1
+    n_estimators: 100
+    max_samples: "auto"
+    max_features: 1.0
+    bootstrap: false
+    random_state: 42
+    
+  # AutoEncoder for deep anomaly detection
+  autoencoder:
+    input_dim: 50
+    encoding_dim: 20
+    hidden_layers: [40, 30, 20, 30, 40]
+    activation: "relu"
+    optimizer: "adam"
+    loss: "mse"
+    epochs: 100
+    batch_size: 32
+    validation_split: 0.2
+    
+  # DBSCAN for behavioral clustering
+  dbscan:
+    eps: 0.5
+    min_samples: 5
+    metric: "euclidean"
+    
+  # Random Cut Forest for streaming anomalies
+  rcf:
+    num_trees: 40
+    sub_sample_size: 256
+    time_decay: 0.0001
+    output_after: 32
+    
+  # Model training configuration
+  training:
+    retrain_interval_hours: 24
+    min_training_samples: 1000
+    feature_importance_threshold: 0.01
+    cross_validation_folds: 5
+
+# User and Entity Behavior Analytics (UEBA)
+ueba:
+  # Baseline configuration
+  baseline:
+    window_days: 30
+    min_events_required: 100
+    update_frequency_hours: 6
+    confidence_threshold: 0.7
+    
+  # Risk scoring
+  risk_scoring:
+    weights:
+      time_anomaly: 0.2
+      location_anomaly: 0.25
+      transaction_anomaly: 0.3
+      access_pattern_anomaly: 0.15
+      peer_group_deviation: 0.1
+    
+    thresholds:
+      low: 0.3
+      medium: 0.6
+      high: 0.8
+      critical: 0.9
+      
+  # Feature extraction
+  features:
+    temporal:
+      - "login_frequency"
+      - "session_duration"
+      - "peak_activity_hours"
+      - "weekend_activity_ratio"
+      - "after_hours_ratio"
+      
+    transactional:
+      - "transaction_volume"
+      - "transaction_frequency"
+      - "average_amount"
+      - "large_transaction_ratio"
+      - "cross_account_transfers"
+      
+    geographical:
+      - "location_entropy"
+      - "country_diversity"
+      - "impossible_travel"
+      - "vpn_usage_pattern"
+      
+    access_patterns:
+      - "privilege_escalation_frequency"
+      - "failed_login_ratio"
+      - "unique_resource_access"
+      - "api_usage_pattern"
+
+# Anomaly Detection
+anomaly_detection:
+  # Real-time detection
+  realtime:
+    processing_interval_seconds: 30
+    batch_size: 100
+    anomaly_threshold: 0.8
+    
+  # Streaming detection
+  streaming:
+    window_size_minutes: 15
+    slide_interval_minutes: 5
+    alert_cooldown_minutes: 30
+    
+  # Statistical detection
+  statistical:
+    z_score_threshold: 3.0
+    mad_threshold: 3.5
+    percentile_threshold: 95
+    
+  # Time series anomaly detection
+  time_series:
+    seasonal_period: 24  # hours
+    trend_alpha: 0.3
+    seasonal_alpha: 0.3
+    level_alpha: 0.7
+
+# Behavioral Modeling
+behavioral_modeling:
+  # User profiling
+  user_profiles:
+    feature_dimensions: 50
+    clustering_algorithm: "kmeans"
+    num_clusters: 10
+    profile_update_frequency: "daily"
+    
+  # Entity relationship modeling
+  entity_relationships:
+    graph_analysis: true
+    community_detection: "louvain"
+    centrality_measures: ["betweenness", "eigenvector", "closeness"]
+    relationship_weights: "transaction_frequency"
+    
+  # Peer group analysis
+  peer_groups:
+    similarity_metric: "cosine"
+    group_size_range: [5, 50]
+    recalculate_frequency: "weekly"
+
+# Incident Processing
+incident_processing:
+  # Correlation rules
+  correlation:
+    time_window_minutes: 60
+    max_events_per_incident: 100
+    correlation_threshold: 0.7
+    
+  # Enrichment
+  enrichment:
+    geo_ip_database: "/app/data/geoip.mmdb"
+    threat_intel_feeds: ["misp", "opencti", "otx"]
+    asset_database: "cmdb"
+    
+  # Scoring
+  scoring:
+    base_score_factors:
+      - "event_severity"
+      - "asset_criticality" 
+      - "user_risk_score"
+      - "threat_intelligence_match"
+    
+    multipliers:
+      after_hours: 1.2
+      privileged_user: 1.5
+      critical_asset: 2.0
+      threat_intel_match: 3.0
+
+# Logging and Monitoring
+logging:
+  level: "INFO"
+  format: "structured"
+  handlers:
+    - type: "console"
+    - type: "file"
+      filename: "/app/logs/ai-intelligence.log"
+      max_size: "100MB"
+      backup_count: 5
+    - type: "syslog"
+      address: "syslog.banking-soc.internal"
+      facility: "local0"
+
+monitoring:
+  metrics:
+    enabled: true
+    export_interval_seconds: 30
+    custom_metrics:
+      - "ueba_risk_scores_processed"
+      - "anomalies_detected"
+      - "incidents_created"
+      - "model_prediction_latency"
+      
+  health_checks:
+    enabled: true
+    interval_seconds: 30
+    endpoints:
+      - "/health"
+      - "/health/ready"
+      - "/health/live"
+      
+  alerts:
+    enabled: true
+    thresholds:
+      high_error_rate: 0.05
+      high_latency_ms: 5000
+      low_throughput_per_minute: 10
+
+# Security
+security:
+  authentication:
+    enabled: true
+    method: "jwt"
+    secret: "${JWT_SECRET}"
+    token_expiry_hours: 24
+    
+  authorization:
+    enabled: true
+    roles:
+      - "analyst"
+      - "admin"
+      - "readonly"
+    
+  encryption:
+    data_at_rest: true
+    algorithm: "AES-256-GCM"
+    key_rotation_days: 90
+    
+  audit:
+    enabled: true
+    log_all_api_calls: true
+    sensitive_fields_redaction: true
+
+# Performance
+performance:
+  # Threading and concurrency
+  workers: 4
+  max_concurrent_requests: 100
+  request_timeout_seconds: 300
+  
+  # Caching
+  cache:
+    enabled: true
+    ttl_seconds: 3600
+    max_size_mb: 512
+    
+  # Resource limits
+  resources:
+    max_memory_mb: 4096
+    max_cpu_percent: 80
+    
+  # Optimization
+  optimization:
+    feature_selection: true
+    model_compression: true
+    batch_processing: true

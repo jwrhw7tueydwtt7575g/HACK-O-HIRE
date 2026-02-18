@@ -1,0 +1,154 @@
+# Vector ETL Docker Compose Configuration
+# Part of Enterprise Banking Autonomous SOC - Zone 2 Analytics
+version: '3.8'
+
+services:
+  vector.etl:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/vector-etl:latest
+    hostname: vector.etl
+    container_name: banking-soc-vector
+    restart: unless-stopped
+    
+    # Network configuration for Zone 1 -> Zone 2 outbound-only
+    networks:
+      - soc-analytics-network
+      - zone1-ingestion
+    
+    ports:
+      # Log ingestion ports from Zone 1
+      - "514:514/udp"    # Syslog
+      - "1514:1514/tcp"  # Wazuh agent format
+      - "5140:5140/tcp"  # Banking apps
+      - "5141:5141/tcp"  # Network security
+      - "5142:5142/tcp"  # Mainframe
+      - "8080:8080/tcp"  # HTTP API
+      # Monitoring and management
+      - "8686:8686/tcp"  # Vector API
+      - "9598:9598/tcp"  # Prometheus metrics
+    
+    environment:
+      # Vector configuration
+      - VECTOR_LOG_LEVEL=info
+      - VECTOR_HMAC_SECRET=${VECTOR_HMAC_SECRET:-changeme_banking_soc_secret}
+      
+      # Downstream system credentials
+      - OPENSEARCH_USERNAME=${OPENSEARCH_USERNAME:-admin}
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_PASSWORD:-admin}
+      - SOC_API_TOKEN=${SOC_API_TOKEN:-banking-soc-token}
+      
+      # TLS configuration
+      - VECTOR_TLS_ENABLED=true
+      - VECTOR_TLS_VERIFY=true
+      
+      # Banking SOC specific
+      - SOC_ENVIRONMENT=zone2_analytics
+      - COMPLIANCE_MODE=enabled
+      - DATA_RETENTION_DAYS=2555  # 7 years
+    
+    volumes:
+      # Configuration
+      - ./config/vector.toml:/etc/vector/vector.toml:ro
+      - ./config/banking-schemas.toml:/etc/vector/banking-schemas.toml:ro
+      
+      # TLS certificates (to be created)
+      - vector-tls-certs:/etc/vector/tls:ro
+      
+      # Data persistence
+      - vector-data:/var/lib/vector
+      - vector-logs:/var/log/vector
+      
+      # Zone 1 log mounts (read-only)
+      - type: bind
+        source: /var/log/banking  # Assumption: Zone 1 logs mounted here
+        target: /var/log/banking
+        read_only: true
+      
+      # Backup storage
+      - vector-backup:/var/log/vector/backup
+    
+    ulimits:
+      # High-throughput banking environment
+      nofile:
+        soft: 65536
+        hard: 65536
+      memlock:
+        soft: -1
+        hard: -1
+    
+    # Resource limits for banking workload
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    
+    depends_on:
+      - vector-cert-generator
+    
+    healthcheck:
+      test: ["/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    labels:
+      - "com.banking-soc.service=vector-etl"
+      - "com.banking-soc.layer=ingestion"
+      - "com.banking-soc.zone=zone2-analytics"
+      - "com.banking-soc.compliance=pci-dss,sox,basel-iii"
+
+  # Certificate generator for TLS setup
+  vector-cert-generator:
+    image: alpine:latest
+    container_name: vector-cert-generator
+    volumes:
+      - vector-tls-certs:/certs
+    command: |
+      sh -c '
+        if [ ! -f /certs/vector-client.crt ]; then
+          apk add --no-cache openssl
+          # Generate Vector client certificates
+          openssl genrsa -out /certs/vector-client.key 4096
+          openssl req -new -x509 -key /certs/vector-client.key -out /certs/vector-client.crt -days 365 \
+            -subj "/C=US/ST=Banking/L=SOC/O=Enterprise Bank/OU=Security Operations/CN=vector.etl"
+          # Set proper permissions
+          chmod 600 /certs/vector-client.key
+          chmod 644 /certs/vector-client.crt
+          echo "Vector TLS certificates generated"
+        else
+          echo "Vector TLS certificates already exist"
+        fi
+      '
+
+networks:
+  soc-analytics-network:
+    external: true
+    name: soc-analytics-network
+  zone1-ingestion:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.1.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-zone1-ingestion
+
+volumes:
+  vector-tls-certs:
+    driver: local
+  vector-data:
+    driver: local
+  vector-logs:
+    driver: local
+  vector-backup:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/banking-soc/vector-backup

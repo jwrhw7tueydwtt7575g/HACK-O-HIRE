@@ -1,0 +1,221 @@
+# OpenSearch Analytics Docker Compose Configuration
+# Multi-tier storage and ML integration for Enterprise Banking SOC
+version: '3.8'
+
+services:
+  opensearch.analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/opensearch-analytics:latest
+    hostname: opensearch.analytics
+    container_name: banking-soc-opensearch
+    restart: unless-stopped
+    
+    networks:
+      - soc-analytics-network
+    
+    ports:
+      - "9200:9200"    # REST API
+      - "9300:9300"    # Transport
+      - "9600:9600"    # Performance Analyzer
+    
+    environment:
+      # Cluster configuration
+      - cluster.name=banking-soc-analytics
+      - node.name=opensearch-analytics-${HOSTNAME}
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      
+      # Security
+      - OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g
+      - plugins.security.disabled=false
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-SecretPassword123!}
+      
+      # Banking SOC specific
+      - SOC_ENVIRONMENT=zone2_analytics
+      - COMPLIANCE_MODE=enabled
+      - AUDIT_LOGGING=enabled
+      - DATA_CLASSIFICATION=CONFIDENTIAL
+      
+      # ML and analytics
+      - plugins.ml_commons.enabled=true
+      - plugins.anomaly_detection.enabled=true
+      - plugins.alerting.enabled=true
+      
+      # Performance tuning
+      - indices.memory.index_buffer_size=20%
+      - indices.fielddata.cache.size=40%
+    
+    volumes:
+      # Data persistence
+      - opensearch-data:/usr/share/opensearch/data
+      - opensearch-logs:/usr/share/opensearch/logs
+      - opensearch-snapshots:/usr/share/opensearch/snapshots
+      
+      # Configuration
+      - ./config/opensearch.yml:/usr/share/opensearch/config/opensearch.yml:ro
+      - ./config/banking-index-templates.json:/usr/share/opensearch/banking-soc/templates/banking-index-templates.json:ro
+      - ./config/ism-policies.json:/usr/share/opensearch/banking-soc/policies/ism-policies.json:ro
+      
+      # TLS certificates
+      - opensearch-certs:/usr/share/opensearch/config/certificates:ro
+      
+      # ML models storage
+      - opensearch-ml-models:/usr/share/opensearch/banking-soc/ml-models
+      
+      # Backup storage for compliance
+      - type: bind
+        source: /opt/banking-soc/opensearch-backup
+        target: /usr/share/opensearch/backup
+    
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    
+    # Resource limits for banking analytics workload
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    
+    depends_on:
+      - opensearch-cert-generator
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "-u", "admin:admin", "https://localhost:9200/_cluster/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    
+    labels:
+      - "com.banking-soc.service=opensearch-analytics"
+      - "com.banking-soc.layer=storage"
+      - "com.banking-soc.zone=zone2-analytics"
+      - "com.banking-soc.compliance=pci-dss,sox,basel-iii"
+
+  # OpenSearch Dashboards for visualization and monitoring
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.1
+    hostname: opensearch.dashboards
+    container_name: banking-soc-dashboards
+    restart: unless-stopped
+    
+    networks:
+      - soc-analytics-network
+    
+    ports:
+      - "5601:5601"
+    
+    environment:
+      - OPENSEARCH_HOSTS=https://opensearch.analytics:9200
+      - OPENSEARCH_USERNAME=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-SecretPassword123!}
+      - OPENSEARCH_SSL_VERIFICATIONMODE=none
+      
+      # Banking SOC branding and customization
+      - SERVER_NAME=banking-soc-dashboards
+      - SERVER_HOST=0.0.0.0
+      - LOGGING_QUIET=true
+    
+    volumes:
+      # Configuration
+      - ./config/opensearch-dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml:ro
+      
+      # TLS certificates
+      - opensearch-certs:/usr/share/opensearch-dashboards/config/certificates:ro
+      
+      # Custom branding and assets
+      - opensearch-dashboards-custom:/usr/share/opensearch-dashboards/assets/custom
+    
+    depends_on:
+      - opensearch.analytics
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5601/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    labels:
+      - "com.banking-soc.service=opensearch-dashboards"
+      - "com.banking-soc.layer=visualization"
+      - "com.banking-soc.zone=zone2-analytics"
+
+  # Certificate generator for OpenSearch TLS
+  opensearch-cert-generator:
+    image: alpine:latest
+    container_name: opensearch-cert-generator
+    volumes:
+      - opensearch-certs:/certs
+    command: |
+      sh -c '
+        if [ ! -f /certs/opensearch.pem ]; then
+          apk add --no-cache openssl
+          
+          # Generate CA
+          openssl genrsa -out /certs/root-ca-key.pem 4096
+          openssl req -new -x509 -sha256 -key /certs/root-ca-key.pem -out /certs/root-ca.pem -days 730 \
+            -subj "/C=US/ST=Banking/L=SOC/O=Enterprise Bank/OU=Security Operations/CN=Banking-SOC-CA"
+          
+          # Generate OpenSearch node certificate
+          openssl genrsa -out /certs/opensearch-key.pem 4096
+          openssl req -new -key /certs/opensearch-key.pem -out /certs/opensearch.csr \
+            -subj "/C=US/ST=Banking/L=SOC/O=Enterprise Bank/OU=Security Operations/CN=opensearch.analytics"
+          openssl x509 -req -in /certs/opensearch.csr -CA /certs/root-ca.pem -CAkey /certs/root-ca-key.pem \
+            -CAcreateserial -out /certs/opensearch.pem -days 365 -sha256 \
+            -extensions v3_req -extfile <(
+              echo "[v3_req]"
+              echo "subjectAltName = @alt_names"
+              echo "[alt_names]"
+              echo "DNS.1 = opensearch.analytics"
+              echo "DNS.2 = localhost"
+              echo "IP.1 = 127.0.0.1"
+            )
+          
+          # Generate admin certificate
+          openssl genrsa -out /certs/admin-key.pem 4096
+          openssl req -new -key /certs/admin-key.pem -out /certs/admin.csr \
+            -subj "/C=US/ST=Banking/L=SOC/O=Enterprise Bank/OU=Security Operations/CN=admin"
+          openssl x509 -req -in /certs/admin.csr -CA /certs/root-ca.pem -CAkey /certs/root-ca-key.pem \
+            -CAcreateserial -out /certs/admin.pem -days 365 -sha256
+          
+          # Set proper permissions
+          chmod 600 /certs/*-key.pem
+          chmod 644 /certs/*.pem /certs/*.csr
+          chown -R 1000:1000 /certs
+          
+          echo "✅ OpenSearch TLS certificates generated"
+        else
+          echo "✅ OpenSearch TLS certificates already exist"
+        fi
+      '
+
+networks:
+  soc-analytics-network:
+    external: true
+    name: soc-analytics-network
+
+volumes:
+  opensearch-data:
+    driver: local
+  opensearch-logs:
+    driver: local
+  opensearch-snapshots:
+    driver: local
+  opensearch-certs:
+    driver: local
+  opensearch-ml-models:
+    driver: local
+  opensearch-dashboards-custom:
+    driver: local

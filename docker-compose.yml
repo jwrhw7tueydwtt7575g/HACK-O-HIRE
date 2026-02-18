@@ -1,0 +1,400 @@
+# Enterprise Banking Autonomous SOC Platform
+# Master Docker Compose Orchestration
+# Zone 1 (Banking Production Simulation) -> Zone 2 (SOC Analytics)
+
+version: '3.8'
+
+networks:
+  zone1_production:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    internal: true  # No outbound internet (except via log export)
+  
+  zone2_soc:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+  
+  log_transit:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+volumes:
+  opensearch_data:
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh-indexer-data:
+  neo4j_data:
+  redis_data:
+  postgres_data:
+  vector_data:
+
+services:
+  # =============================================================================
+  # ZONE 1: BANKING PRODUCTION SIMULATION ENVIRONMENT
+  # =============================================================================
+  
+  log-simulator:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile.generator
+    container_name: banking-log-simulator
+    networks:
+      - zone1_production
+      - log_transit
+    environment:
+      VECTOR_HOST: vector-ingest
+      VECTOR_PORT: 5140
+      SIMULATION_MODE: continuous
+      LOGS_PER_SECOND: 50
+    restart: unless-stopped
+    depends_on:
+      - vector-ingest
+
+  # =============================================================================
+  # LOG TRANSIT ZONE: VECTOR ETL
+  # =============================================================================
+  
+  vector-ingest:
+    build:
+      context: ./vector
+      dockerfile: Dockerfile
+    container_name: vector-ingest
+    networks:
+      - log_transit
+      - zone2_soc
+    ports:
+      - "5140:5140"    # Syslog TCP
+      - "514:514/udp"  # Syslog UDP
+      - "8080:8080"    # HTTP ingestion
+      - "8686:8686"    # Vector API
+    volumes:
+      - ./vector/config/vector.toml:/etc/vector/vector.toml:ro
+      - vector_data:/var/lib/vector
+    environment:
+      VECTOR_CONFIG: /etc/vector/vector.toml
+      VECTOR_LOG: info
+      WAZUH_MANAGER_HOST: wazuh-manager
+      OPENSEARCH_HOST: opensearch
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8686/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      - opensearch
+      - wazuh-manager
+
+  # =============================================================================
+  # ZONE 2: SOC ANALYTICAL ENVIRONMENT
+  # =============================================================================
+
+  # --- OpenSearch Stack ---
+  
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch
+    networks:
+      - zone2_soc
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    environment:
+      - cluster.name=banking-soc-cluster
+      - node.name=opensearch-node1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms2g -Xmx2g"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-Admin123!@#}
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.0
+    container_name: opensearch-dashboards
+    networks:
+      - zone2_soc
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    depends_on:
+      - opensearch
+    restart: unless-stopped
+
+  # --- Wazuh Stack ---
+  
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.7.0
+    container_name: wazuh-manager
+    networks:
+      - zone2_soc
+    ports:
+      - "1514:1514"     # Agent connection
+      - "1515:1515"     # Agent enrollment
+      - "514:514/udp"   # Syslog
+      - "55000:55000"   # Wazuh API
+    environment:
+      - INDEXER_URL=https://opensearch:9200
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-Admin123!@#}
+      - FILEBEAT_SSL_VERIFICATION_MODE=none
+      - SSL_CERTIFICATE_AUTHORITIES=""
+      - SSL_CERTIFICATE=""
+      - SSL_KEY=""
+      - API_USERNAME=wazuh-api
+      - API_PASSWORD=${WAZUH_API_PASSWORD:-WazuhAPI123!}
+    volumes:
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - ./wazuh/config/rules:/var/ossec/etc/rules:ro
+      - ./wazuh/config/decoders:/var/ossec/etc/decoders:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:55000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # --- AI Intelligence Layer (UEBA) ---
+  
+  ai-intelligence:
+    build:
+      context: ./ai-intelligence
+      dockerfile: Dockerfile
+    container_name: ai-intelligence-ueba
+    networks:
+      - zone2_soc
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENSEARCH_HOST=opensearch:9200
+      - OPENSEARCH_USER=admin
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-Admin123!@#}
+      - REDIS_HOST=redis
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-Neo4j123!}
+      - LOG_LEVEL=INFO
+      - MODEL_UPDATE_INTERVAL=21600  # 6 hours
+    volumes:
+      - ./ai-intelligence/models:/app/models
+      - ./ai-intelligence/config:/app/config:ro
+    depends_on:
+      - opensearch
+      - redis
+      - neo4j
+    restart: unless-stopped
+
+  # --- Enrichment Layer (CVE/NVD, Threat Intel, LLM) ---
+  
+  enrichment:
+    build:
+      context: ./enrichment
+      dockerfile: Dockerfile
+    container_name: enrichment-llm
+    networks:
+      - zone2_soc
+    ports:
+      - "8002:8002"
+    environment:
+      - OPENSEARCH_HOST=opensearch:9200
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-Admin123!@#}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - NVD_API_KEY=${NVD_API_KEY}
+      - REDIS_HOST=redis
+      - LOG_LEVEL=INFO
+      - LLM_MODE=cloud  # or on_premises for local models
+    volumes:
+      - ./enrichment/config:/config:ro
+      - ./enrichment/prompts:/prompts:ro
+      - ./enrichment/models:/models  # For local LLM models
+    depends_on:
+      - opensearch
+      - redis
+      - ai-intelligence
+    restart: unless-stopped
+
+  # --- SOAR Automation Layer ---
+  
+  soar-automation:
+    build:
+      context: ./soar-automation
+      dockerfile: Dockerfile
+    container_name: soar-automation
+    networks:
+      - zone2_soc
+    ports:
+      - "8003:8003"
+    environment:
+      - OPENSEARCH_HOST=opensearch:9200
+      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-Admin123!@#}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=soar_db
+      - POSTGRES_USER=soar_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-Soar123!}
+      - REDIS_HOST=redis
+      - WAZUH_API_URL=https://wazuh-manager:55000
+      - WAZUH_API_USER=wazuh-api
+      - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD:-WazuhAPI123!}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./soar-automation/config:/config:ro
+      - ./soar-automation/playbooks:/playbooks:ro
+    depends_on:
+      - opensearch
+      - postgres
+      - redis
+      - enrichment
+    restart: unless-stopped
+
+  # --- Supporting Services ---
+  
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    networks:
+      - zone2_soc
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-Redis123!}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.14-community
+    container_name: neo4j-graph
+    networks:
+      - zone2_soc
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-Neo4j123!}
+      - NEO4J_dbms_memory_pagecache_size=1G
+      - NEO4J_dbms_memory_heap_max__size=2G
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-Neo4j123!}", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    networks:
+      - zone2_soc
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=soar_db
+      - POSTGRES_USER=soar_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-Soar123!}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./soar-automation/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soar_user -d soar_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Monitoring & Observability ---
+  
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      - zone2_soc
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      - zone2_soc
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-Admin123!}
+      - GF_INSTALL_PLUGINS=grafana-opensearch-datasource
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+      - opensearch
+    restart: unless-stopped
+
+# =============================================================================
+# Health Check Summary
+# =============================================================================
+# Run: docker-compose ps to see service health
+# Access points:
+#   - OpenSearch Dashboards: http://localhost:5601
+#   - Grafana: http://localhost:3000
+#   - Wazuh API: https://localhost:55000
+#   - AI Intelligence API: http://localhost:8001
+#   - Enrichment API: http://localhost:8002
+#   - SOAR API: http://localhost:8003
+#   - Neo4j Browser: http://localhost:7474
+#   - Prometheus: http://localhost:9090
+# =============================================================================

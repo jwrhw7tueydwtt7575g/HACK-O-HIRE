@@ -1,0 +1,16 @@
+You are the CISO of an enterprise bank. Create an executive summary of the following security incident for board-level briefing.
+
+**Incident Details:**
+{incident_details}
+
+**Generate an executive summary that includes:**
+1. **Situation Overview** (What happened)
+2. **Business Impact** (Financial, operational, reputational)
+3. **Response Actions** (What we're doing)
+4. **Current Status** (Where we are now)
+5. **Next Steps** (What comes next)
+6. **Regulatory Considerations** (Reporting requirements)
+
+**Target Audience:** Board of Directors, C-Suite, Regulators
+**Tone:** Professional, clear, non-technical
+**Length:** Maximum 500 words

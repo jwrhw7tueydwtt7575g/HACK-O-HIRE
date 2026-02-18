@@ -1,0 +1,262 @@
+# AI Intelligence Docker Compose Configuration
+# UEBA and Behavioral Analytics for Enterprise Banking SOC
+version: '3.8'
+
+services:
+  ai-intelligence:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/ai-intelligence:latest
+    hostname: ai.intelligence
+    container_name: banking-soc-ai
+    restart: unless-stopped
+    
+    networks:
+      - soc-analytics-network
+      - soc-ai-network
+    
+    ports:
+      - "8000:8000"  # API
+      - "8001:8001"  # Admin API
+      - "9090:9090"  # Metrics
+    
+    environment:
+      # Service configuration
+      - AI_INTEL_CONFIG=/app/config/ai-intelligence.yaml
+      - PYTHONPATH=/app/src
+      - LOG_LEVEL=INFO
+      
+      # Database credentials
+      - OPENSEARCH_AI_PASSWORD=${OPENSEARCH_AI_PASSWORD:-SecretPassword123!}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis-secret}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j-secret}
+      
+      # Security
+      - JWT_SECRET=${JWT_SECRET:-banking-soc-jwt-secret-key}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-banking-soc-encryption-key}
+      
+      # ML Configuration
+      - MODEL_STORAGE=/app/models
+      - FEATURE_STORE_PATH=/app/data/features
+      - ENABLE_GPU=${ENABLE_GPU:-false}
+      
+      # Performance tuning
+      - WORKERS=4
+      - MAX_CONCURRENT_REQUESTS=100
+      - BATCH_SIZE=32
+    
+    volumes:
+      # Configuration
+      - ./config/ai-intelligence.yaml:/app/config/ai-intelligence.yaml:ro
+      
+      # Model storage
+      - ai-models:/app/models
+      - ai-data:/app/data
+      - ai-logs:/app/logs
+      
+      # Feature store
+      - ai-features:/app/data/features
+      
+      # GeoIP database (to be mounted)
+      - type: bind
+        source: /opt/banking-soc/geoip
+        target: /app/data/geoip
+        read_only: true
+    
+    depends_on:
+      - redis.cache
+      - neo4j.graph
+    
+    # Resource limits for AI workloads
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    
+    labels:
+      - "com.banking-soc.service=ai-intelligence"
+      - "com.banking-soc.layer=analytics"
+      - "com.banking-soc.zone=zone2-analytics"
+      - "com.banking-soc.ml=true"
+
+  # Redis for caching and model storage
+  redis.cache:
+    image: redis:7-alpine
+    hostname: redis.cache
+    container_name: banking-soc-redis
+    restart: unless-stopped
+    
+    networks:
+      - soc-ai-network
+    
+    ports:
+      - "6379:6379"
+    
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis-secret}
+    
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-redis-secret}
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    
+    volumes:
+      - redis-data:/data
+      - redis-conf:/usr/local/etc/redis
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    labels:
+      - "com.banking-soc.service=redis"
+      - "com.banking-soc.layer=cache"
+
+  # Neo4j for graph analytics
+  neo4j.graph:
+    image: neo4j:5.11-community
+    hostname: neo4j.graph
+    container_name: banking-soc-neo4j
+    restart: unless-stopped
+    
+    networks:
+      - soc-ai-network
+    
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-neo4j-secret}
+      - NEO4J_dbms_default__database=banking_soc
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=2g
+      - NEO4J_dbms_memory_pagecache_size=1g
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*
+      - NEO4J_dbms_security_procedures_allowlist=gds.*
+      
+      # Banking SOC specific configuration
+      - NEO4J_dbms_logs_query_enabled=true
+      - NEO4J_dbms_logs_query_threshold=1s
+      - NEO4J_dbms_tx__log_rotation_retention__policy=2G size
+    
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-conf:/conf
+      - neo4j-plugins:/plugins
+    
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD:-neo4j-secret}", "MATCH () RETURN count(*) as count"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    
+    labels:
+      - "com.banking-soc.service=neo4j"
+      - "com.banking-soc.layer=graph"
+
+  # ML Model Training Service (optional)
+  ml-trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/ai-intelligence:latest
+    hostname: ml.trainer
+    container_name: banking-soc-ml-trainer
+    restart: "no"  # Run on-demand for training
+    
+    networks:
+      - soc-ai-network
+    
+    environment:
+      - AI_INTEL_CONFIG=/app/config/ai-intelligence.yaml
+      - PYTHONPATH=/app/src
+      - LOG_LEVEL=INFO
+      - MODE=training
+      
+      # Database credentials (same as main service)
+      - OPENSEARCH_AI_PASSWORD=${OPENSEARCH_AI_PASSWORD:-SecretPassword123!}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis-secret}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-neo4j-secret}
+    
+    volumes:
+      # Shared model storage
+      - ai-models:/app/models
+      - ai-data:/app/data
+      - ai-logs:/app/logs
+      
+      # Training data
+      - ai-training-data:/app/training-data
+    
+    command: ["python", "src/training/train_models.py"]
+    
+    depends_on:
+      - ai-intelligence
+      - redis.cache
+      - neo4j.graph
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 16G
+    
+    labels:
+      - "com.banking-soc.service=ml-trainer"
+      - "com.banking-soc.layer=training"
+
+networks:
+  soc-analytics-network:
+    external: true
+    name: soc-analytics-network
+  soc-ai-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-soc-ai
+
+volumes:
+  ai-models:
+    driver: local
+  ai-data:
+    driver: local
+  ai-logs:
+    driver: local
+  ai-features:
+    driver: local
+  ai-training-data:
+    driver: local
+  redis-data:
+    driver: local
+  redis-conf:
+    driver: local
+  neo4j-data:
+    driver: local
+  neo4j-logs:
+    driver: local
+  neo4j-conf:
+    driver: local
+  neo4j-plugins:
+    driver: local

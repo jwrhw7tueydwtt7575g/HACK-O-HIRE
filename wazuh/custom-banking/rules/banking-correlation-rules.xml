@@ -1,0 +1,94 @@
+<!--
+  Enterprise Banking SOC - Correlation Rules
+  Rule IDs: 100100-100199
+  These composite rules correlate multiple alerts into candidate incidents.
+  They trigger when specific sequences of events occur within defined time windows.
+-->
+
+<group name="banking_soc_correlation,">
+
+  <!-- ============================================================ -->
+  <!-- CORRELATION: Brute Force → Successful Login (Compromised)     -->
+  <!-- ============================================================ -->
+  <rule id="100100" level="13">
+    <if_sid>100001</if_sid>
+    <field name="event_id">4624</field>
+    <same_field>source_ip</same_field>
+    <description>Banking SOC INCIDENT: Successful login after brute force from $(source_ip) — account $(user_id) likely compromised.</description>
+    <mitre>
+      <id>T1110</id>
+      <id>T1078</id>
+    </mitre>
+    <group>banking_correlation,credential_compromise,incident_critical,pci_dss_10.2.4,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- CORRELATION: Privilege Escalation → Sensitive Data Access      -->
+  <!-- ============================================================ -->
+  <rule id="100101" level="15" timeframe="1800">
+    <if_sid>100010,100011</if_sid>
+    <field name="risk_flags">bulk_data_access|schema_modification</field>
+    <same_field>user_id</same_field>
+    <description>Banking SOC INCIDENT: CRITICAL — Privilege escalation followed by sensitive data access by $(user_id). Possible insider threat or compromised admin.</description>
+    <mitre>
+      <id>T1098</id>
+      <id>T1005</id>
+    </mitre>
+    <group>banking_correlation,insider_threat,incident_critical,sox_compliance,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- CORRELATION: Lateral Movement Chain (3+ hops in 30 min)       -->
+  <!-- ============================================================ -->
+  <rule id="100102" level="15" frequency="3" timeframe="1800">
+    <if_matched_sid>100040,100042</if_matched_sid>
+    <same_field>user_id</same_field>
+    <description>Banking SOC INCIDENT: CRITICAL — Lateral movement chain detected. User $(user_id) accessed 3+ systems in 30 minutes: $(source_ip) → $(dest_ip).</description>
+    <mitre>
+      <id>T1021</id>
+      <id>T1570</id>
+    </mitre>
+    <group>banking_correlation,lateral_movement_chain,incident_critical,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- CORRELATION: Account Creation → Immediate Privilege Grant      -->
+  <!-- ============================================================ -->
+  <rule id="100103" level="13" timeframe="600">
+    <if_sid>100013</if_sid>
+    <field name="group">Domain Admins|Enterprise Admins</field>
+    <same_field>target_user</same_field>
+    <description>Banking SOC INCIDENT: New account $(target_user) immediately added to $(group) by $(source_user).</description>
+    <mitre>
+      <id>T1136.002</id>
+      <id>T1098</id>
+    </mitre>
+    <group>banking_correlation,rogue_admin,incident_critical,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- CORRELATION: Port Scan → Successful Exploit                   -->
+  <!-- ============================================================ -->
+  <rule id="100104" level="13" timeframe="600">
+    <if_sid>100041</if_sid>
+    <field name="event_category">windows_security|api_access</field>
+    <same_field>source_ip</same_field>
+    <description>Banking SOC INCIDENT: Port scan from $(source_ip) followed by successful access — potential exploitation.</description>
+    <mitre>
+      <id>T1046</id>
+      <id>T1190</id>
+    </mitre>
+    <group>banking_correlation,scan_and_exploit,incident_high,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- CORRELATION: Fraud Pattern (Flagged TX + After Hours + Admin) -->
+  <!-- ============================================================ -->
+  <rule id="100105" level="15" timeframe="3600">
+    <if_sid>100032,100033</if_sid>
+    <same_field>user_id</same_field>
+    <description>Banking SOC INCIDENT: CRITICAL FRAUD — Flagged transaction combined with after-hours privileged operation by $(user_id).</description>
+    <group>banking_correlation,fraud_pattern,incident_critical,sox_compliance,</group>
+  </rule>
+
+</group>

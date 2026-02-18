@@ -1,0 +1,274 @@
+<!--
+  Enterprise Banking SOC - Custom Detection Rules
+  Rule IDs: 100000-100099 (individual rules), 100100+ (correlation rules in separate file)
+  Severity mapping: 3=Low, 6=Medium, 10=High, 13=Critical
+  All rules include MITRE ATT&CK and compliance framework tagging.
+-->
+
+<group name="banking_soc,">
+
+  <!-- ============================================================ -->
+  <!-- PARENT RULE: Base match for all banking SOC decoded events    -->
+  <!-- ============================================================ -->
+  <rule id="100000" level="0">
+    <decoded_as>banking-soc-json</decoded_as>
+    <description>Banking SOC baseline event (decoded by Vector pipeline).</description>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- BRUTE FORCE DETECTION (T1110)                                 -->
+  <!-- ============================================================ -->
+  <rule id="100001" level="10" frequency="5" timeframe="60">
+    <if_matched_sid>100000</if_matched_sid>
+    <field name="event_category">windows_security</field>
+    <field name="event_id">4625</field>
+    <description>Banking SOC: Brute force attack — $(event_id) failed logins from $(source_ip) within 60 seconds.</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>banking_brute_force,authentication_failure,pci_dss_10.2.4,</group>
+  </rule>
+
+  <rule id="100002" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">windows_security</field>
+    <field name="event_id">4740</field>
+    <description>Banking SOC: Account lockout — user $(user_id) locked out on $(computer_name).</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>banking_brute_force,account_lockout,pci_dss_10.2.4,</group>
+  </rule>
+
+  <rule id="100003" level="6" frequency="3" timeframe="120">
+    <if_matched_sid>100000</if_matched_sid>
+    <field name="event_category">api_access</field>
+    <field name="http_status_code">^40[13]$</field>
+    <description>Banking SOC: API brute force — repeated auth failures from $(source_ip) to $(endpoint).</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>banking_brute_force,api_abuse,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- PRIVILEGE ESCALATION (T1078, T1098)                           -->
+  <!-- ============================================================ -->
+  <rule id="100010" level="13">
+    <if_sid>100000</if_sid>
+    <field name="event_id">4728|4732|4756</field>
+    <field name="group">Domain Admins|Enterprise Admins|Schema Admins</field>
+    <description>Banking SOC: CRITICAL — User $(target_user) added to privileged group $(group) by $(source_user).</description>
+    <mitre>
+      <id>T1098</id>
+    </mitre>
+    <group>banking_privilege_escalation,pci_dss_10.2.5,sox_compliance,</group>
+  </rule>
+
+  <rule id="100011" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_id">4672</field>
+    <field name="risk_flags">privilege_escalation</field>
+    <description>Banking SOC: Special privileges assigned to user $(user_id) on $(computer_name).</description>
+    <mitre>
+      <id>T1078.002</id>
+    </mitre>
+    <group>banking_privilege_escalation,pci_dss_10.2.2,</group>
+  </rule>
+
+  <rule id="100012" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">cloud_security</field>
+    <field name="risk_flags">iam_policy_change</field>
+    <description>Banking SOC: Cloud IAM policy change — $(event_name) by $(user_identity) from $(source_ip).</description>
+    <mitre>
+      <id>T1098.001</id>
+    </mitre>
+    <group>banking_privilege_escalation,cloud_iam,</group>
+  </rule>
+
+  <rule id="100013" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_id">4720</field>
+    <description>Banking SOC: New user account created — $(target_user) by $(source_user) on $(dc_hostname).</description>
+    <mitre>
+      <id>T1136.002</id>
+    </mitre>
+    <group>banking_privilege_escalation,account_creation,pci_dss_10.2.5,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- DATA EXFILTRATION (T1048)                                     -->
+  <!-- ============================================================ -->
+  <rule id="100020" level="13">
+    <if_sid>100000</if_sid>
+    <field name="event_category">database_audit</field>
+    <field name="risk_flags">bulk_data_access</field>
+    <description>Banking SOC: CRITICAL — Bulk data extraction detected on $(database_name).$(table) by $(user_account).</description>
+    <mitre>
+      <id>T1048</id>
+    </mitre>
+    <group>banking_data_exfil,pci_dss_10.2.1,sox_compliance,</group>
+  </rule>
+
+  <rule id="100021" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">database_audit</field>
+    <field name="query_type">SELECT</field>
+    <field name="table">customers|accounts|card_numbers|transactions</field>
+    <description>Banking SOC: Sensitive table query — $(query_type) on $(table) by $(user_account) ($(rows_affected) rows).</description>
+    <mitre>
+      <id>T1005</id>
+    </mitre>
+    <group>banking_data_exfil,sensitive_data_access,pci_dss_10.2.1,</group>
+  </rule>
+
+  <rule id="100022" level="13">
+    <if_sid>100000</if_sid>
+    <field name="event_category">database_audit</field>
+    <field name="risk_flags">schema_modification</field>
+    <description>Banking SOC: CRITICAL — Database schema modification ($(query_type)) on $(database_name) by $(user_account).</description>
+    <mitre>
+      <id>T1485</id>
+    </mitre>
+    <group>banking_data_exfil,schema_change,pci_dss_10.2.7,sox_compliance,</group>
+  </rule>
+
+  <rule id="100023" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">mainframe_security</field>
+    <field name="risk_flags">unauthorized_dataset_access</field>
+    <description>Banking SOC: Mainframe unauthorised dataset access — $(dataset_accessed) by $(user_id) (job $(job_name)).</description>
+    <mitre>
+      <id>T1005</id>
+    </mitre>
+    <group>banking_data_exfil,mainframe_security,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- SUSPICIOUS TRANSACTIONS                                       -->
+  <!-- ============================================================ -->
+  <rule id="100030" level="6">
+    <if_sid>100000</if_sid>
+    <field name="event_category">banking_transaction</field>
+    <field name="risk_flags">large_transfer</field>
+    <description>Banking SOC: High-value transfer — $(amount) $(currency) from $(source_account) to $(destination_account) (TXN: $(transaction_id)).</description>
+    <group>banking_transaction,high_value,pci_dss_10.2.1,</group>
+  </rule>
+
+  <rule id="100031" level="10" frequency="5" timeframe="300">
+    <if_matched_sid>100030</if_matched_sid>
+    <same_field>source_account</same_field>
+    <description>Banking SOC: Rapid successive high-value transfers from $(source_account) — possible fraud.</description>
+    <group>banking_transaction,rapid_transfers,fraud_detection,</group>
+  </rule>
+
+  <rule id="100032" level="13">
+    <if_sid>100000</if_sid>
+    <field name="event_category">banking_transaction</field>
+    <field name="status">FLAGGED</field>
+    <description>Banking SOC: CRITICAL — Flagged transaction $(transaction_id) — $(amount) $(currency) from $(source_account).</description>
+    <group>banking_transaction,flagged,fraud_detection,</group>
+  </rule>
+
+  <rule id="100033" level="6">
+    <if_sid>100000</if_sid>
+    <field name="event_category">banking_transaction</field>
+    <field name="privileged_operation">true</field>
+    <field name="after_hours">true</field>
+    <description>Banking SOC: After-hours privileged banking operation by $(user_id) at $(branch_code).</description>
+    <group>banking_transaction,after_hours,pci_dss_10.2.2,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- LATERAL MOVEMENT (T1021)                                      -->
+  <!-- ============================================================ -->
+  <rule id="100040" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">network_security</field>
+    <field name="risk_flags">critical_port_access</field>
+    <field name="action">ALLOW</field>
+    <description>Banking SOC: Critical port access — $(source_ip) ($(source_country)) → $(dest_ip):$(dest_port) via $(protocol).</description>
+    <mitre>
+      <id>T1021</id>
+    </mitre>
+    <group>banking_lateral_movement,critical_port,pci_dss_1.2.1,</group>
+  </rule>
+
+  <rule id="100041" level="6" frequency="20" timeframe="60">
+    <if_matched_sid>100000</if_matched_sid>
+    <field name="event_category">network_security</field>
+    <field name="action">DENY|DROP</field>
+    <same_field>source_ip</same_field>
+    <description>Banking SOC: Port scan detected — $(source_ip) hit 20+ blocked ports in 60 seconds.</description>
+    <mitre>
+      <id>T1046</id>
+    </mitre>
+    <group>banking_lateral_movement,port_scan,</group>
+  </rule>
+
+  <rule id="100042" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">windows_security</field>
+    <field name="event_id">4624</field>
+    <field name="logon_type">10</field>
+    <description>Banking SOC: RDP login — $(user_id) from $(source_ip) to $(computer_name).</description>
+    <mitre>
+      <id>T1021.001</id>
+    </mitre>
+    <group>banking_lateral_movement,rdp_access,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- COMPLIANCE RULES (PCI-DSS, SOX, BASEL III)                    -->
+  <!-- ============================================================ -->
+  <rule id="100050" level="6">
+    <if_sid>100000</if_sid>
+    <field name="event_category">banking_transaction|database_audit</field>
+    <field name="after_hours">true</field>
+    <description>Banking SOC: PCI-DSS — Cardholder data access outside business hours by $(user_id).</description>
+    <group>banking_compliance,pci_dss_10.6.1,after_hours,</group>
+  </rule>
+
+  <rule id="100051" level="10">
+    <if_sid>100000</if_sid>
+    <field name="risk_flags">schema_modification|iam_policy_change</field>
+    <description>Banking SOC: SOX — Financial system configuration change detected. Action: $(query_type|event_name).</description>
+    <group>banking_compliance,sox_compliance,config_change,</group>
+  </rule>
+
+  <rule id="100052" level="10">
+    <if_sid>100000</if_sid>
+    <field name="event_category">network_security</field>
+    <field name="dest_port">^(80|21|23|25|110|143)$</field>
+    <field name="action">ALLOW</field>
+    <description>Banking SOC: Unencrypted protocol detected — $(protocol) from $(source_ip) to $(dest_ip):$(dest_port).</description>
+    <group>banking_compliance,pci_dss_4.1,unencrypted_protocol,</group>
+  </rule>
+
+  <!-- ============================================================ -->
+  <!-- API ABUSE                                                     -->
+  <!-- ============================================================ -->
+  <rule id="100060" level="6">
+    <if_sid>100000</if_sid>
+    <field name="event_category">api_access</field>
+    <field name="risk_flags">directory_traversal_xss</field>
+    <description>Banking SOC: Web attack detected — directory traversal/XSS attempt from $(source_ip) to $(endpoint).</description>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+    <group>banking_api_abuse,web_attack,pci_dss_6.5,</group>
+  </rule>
+
+  <rule id="100061" level="10" frequency="50" timeframe="60">
+    <if_matched_sid>100000</if_matched_sid>
+    <field name="event_category">api_access</field>
+    <same_field>source_ip</same_field>
+    <description>Banking SOC: API rate limit exceeded — $(source_ip) made 50+ requests in 60 seconds.</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>banking_api_abuse,rate_limit,</group>
+  </rule>
+
+</group>

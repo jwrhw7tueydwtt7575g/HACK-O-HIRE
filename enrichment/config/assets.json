@@ -1,0 +1,112 @@
+{
+  "core-banking-01": {
+    "asset_id": "core-banking-01",
+    "asset_name": "Core Banking Primary Server",
+    "asset_type": "server",
+    "business_unit": "core_banking",
+    "criticality_score": 10,
+    "owner": "ops@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.1.10", "10.0.1.11"],
+    "hostnames": ["core-banking-01.internal", "cbs-primary.internal"]
+  },
+  "core-banking-02": {
+    "asset_id": "core-banking-02",
+    "asset_name": "Core Banking Standby Server",
+    "asset_type": "server",
+    "business_unit": "core_banking",
+    "criticality_score": 10,
+    "owner": "ops@bank.com",
+    "location": "DC2",
+    "ip_addresses": ["10.0.1.20"],
+    "hostnames": ["core-banking-02.internal"]
+  },
+  "api-gateway-01": {
+    "asset_id": "api-gateway-01",
+    "asset_name": "API Gateway Primary",
+    "asset_type": "server",
+    "business_unit": "payments",
+    "criticality_score": 9,
+    "owner": "api-team@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.2.10"],
+    "hostnames": ["api.bank.com", "gateway-01.internal"]
+  },
+  "db-prod-01": {
+    "asset_id": "db-prod-01",
+    "asset_name": "Production Database Primary",
+    "asset_type": "database",
+    "business_unit": "core_banking",
+    "criticality_score": 10,
+    "owner": "dba@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.3.10"],
+    "hostnames": ["db-prod-01.internal"]
+  },
+  "web-portal-01": {
+    "asset_id": "web-portal-01",
+    "asset_name": "Customer Web Portal",
+    "asset_type": "application",
+    "business_unit": "customer_portal",
+    "criticality_score": 8,
+    "owner": "web-team@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.4.10"],
+    "hostnames": ["portal.bank.com", "web-01.internal"]
+  },
+  "ad-dc-01": {
+    "asset_id": "ad-dc-01",
+    "asset_name": "Active Directory Domain Controller",
+    "asset_type": "server",
+    "business_unit": "internal_apps",
+    "criticality_score": 9,
+    "owner": "infra@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.5.10"],
+    "hostnames": ["dc01.bank.local"]
+  },
+  "fw-perimeter-01": {
+    "asset_id": "fw-perimeter-01",
+    "asset_name": "Perimeter Firewall",
+    "asset_type": "network_device",
+    "business_unit": "internal_apps",
+    "criticality_score": 9,
+    "owner": "network@bank.com",
+    "location": "DC1-DMZ",
+    "ip_addresses": ["10.0.6.1", "203.0.113.1"],
+    "hostnames": ["fw-01.internal"]
+  },
+  "payment-processor-01": {
+    "asset_id": "payment-processor-01",
+    "asset_name": "Payment Processing Server",
+    "asset_type": "server",
+    "business_unit": "payments",
+    "criticality_score": 10,
+    "owner": "payments@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.7.10"],
+    "hostnames": ["payment-01.internal"]
+  },
+  "swift-gateway-01": {
+    "asset_id": "swift-gateway-01",
+    "asset_name": "SWIFT Gateway Server",
+    "asset_type": "server",
+    "business_unit": "trading",
+    "criticality_score": 10,
+    "owner": "trading@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.8.10"],
+    "hostnames": ["swift-01.internal"]
+  },
+  "dev-server-01": {
+    "asset_id": "dev-server-01",
+    "asset_name": "Development Server",
+    "asset_type": "server",
+    "business_unit": "development",
+    "criticality_score": 4,
+    "owner": "devops@bank.com",
+    "location": "DC1",
+    "ip_addresses": ["10.0.9.10"],
+    "hostnames": ["dev-01.internal"]
+  }
+}

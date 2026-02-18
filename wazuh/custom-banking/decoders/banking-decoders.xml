@@ -1,0 +1,83 @@
+<!--
+  Enterprise Banking SOC - Custom Decoders
+  Decodes Vector-normalised JSON events into Wazuh-processable fields.
+  These decoders handle all 8 log types from the Vector ETL pipeline.
+-->
+
+<!-- Parent decoder: matches all Vector-normalised JSON events -->
+<decoder name="banking-soc-json">
+  <prematch>^{"</prematch>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Core Banking Transactions                        -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-core-banking">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"banking_transaction"</regex>
+  <order>event_category,transaction_id,transaction_type,source_account,destination_account,amount,currency,status,branch_code,teller_id,user_id,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Windows Security Events                          -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-windows">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"windows_security"</regex>
+  <order>event_category,event_id,computer_name,security_id,logon_type,source_ip,user_id,mitre_technique,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Active Directory / IAM Events                    -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-active-directory">
+  <parent>banking-soc-json</parent>
+  <regex>"log_type":\s*"active_directory"</regex>
+  <order>event_category,event_id,domain,target_user,source_user,group,dc_hostname,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: API / Web Portal Access Logs                     -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-api">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"api_access"</regex>
+  <order>event_category,http_method,endpoint,http_status_code,source_ip,user_agent,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Database Audit Logs                              -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-database">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"database_audit"</regex>
+  <order>event_category,database_name,query_type,user_account,operation,table,rows_affected,duration_ms,source_ip,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Network Security (Firewall / IDS / IPS)          -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-network">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"network_security"</regex>
+  <order>event_category,source_ip,dest_ip,dest_port,action,source_country,source_asn,protocol,bytes_sent,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Cloud Audit Logs (AWS/Azure/GCP)                 -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-cloud">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"cloud_security"</regex>
+  <order>event_category,event_name,aws_region,user_identity,source_ip,resource_arn,response,mitre_technique,risk_flags,zone,log_source</order>
+</decoder>
+
+<!-- ============================================================ -->
+<!-- Sub-decoder: Mainframe z/OS (SMF / RACF)                      -->
+<!-- ============================================================ -->
+<decoder name="banking-soc-mainframe">
+  <parent>banking-soc-json</parent>
+  <regex>"event_category":\s*"mainframe_security"</regex>
+  <order>event_category,job_name,user_id,racf_event,smf_type,cpu_time,io_operations,dataset_accessed,return_code,risk_flags,zone,log_source</order>
+</decoder>

@@ -1,0 +1,240 @@
+# Enrichment Service Docker Compose Configuration
+# Threat Intelligence and LLM Playbook Generation
+version: '3.8'
+
+services:
+  enrichment:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/enrichment:latest
+    hostname: enrichment.service
+    container_name: banking-soc-enrichment
+    restart: unless-stopped
+    
+    networks:
+      - soc-analytics-network
+      - soc-enrichment-network
+    
+    ports:
+      - "8100:8100"  # API
+      - "8101:8101"  # Admin API
+      - "9091:9091"  # Metrics
+    
+    environment:
+      # Service configuration
+      - ENRICHMENT_CONFIG=/app/config/enrichment.yaml
+      - PROMPTS_DIR=/app/prompts
+      - PYTHONPATH=/app/src
+      - LOG_LEVEL=INFO
+      
+      # Database credentials
+      - OPENSEARCH_ENRICHMENT_PASSWORD=${OPENSEARCH_ENRICHMENT_PASSWORD:-SecretPassword123!}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis-secret}
+      
+      # Wazuh API
+      - WAZUH_API_USER=${WAZUH_API_USER:-wazuh-wui}
+      - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD:-MyS3cr37P450r.*-}
+      
+      # CVE Data Sources
+      - NVD_API_KEY=${NVD_API_KEY:-}
+      
+      # Threat Intelligence
+      - MISP_URL=${MISP_URL:-https://misp.internal}
+      - MISP_API_KEY=${MISP_API_KEY:-}
+      - OPENCTI_URL=${OPENCTI_URL:-https://opencti.internal}
+      - OPENCTI_API_KEY=${OPENCTI_API_KEY:-}
+      - OTX_API_KEY=${OTX_API_KEY:-}
+      - CUSTOM_FEED_URL=${CUSTOM_FEED_URL:-}
+      
+      # Asset Management
+      - CMDB_API_URL=${CMDB_API_URL:-https://cmdb.internal}
+      - CMDB_API_KEY=${CMDB_API_KEY:-}
+      
+      # LLM Configuration
+      - LLM_MODE=${LLM_MODE:-hybrid}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_ORG_ID=${OPENAI_ORG_ID:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ENABLE_GPU=${ENABLE_GPU:-false}
+      
+      # SOAR Integration
+      - SOAR_WEBHOOK_URL=${SOAR_WEBHOOK_URL:-http://soar.automation:8200/api/incidents}
+      
+      # Security
+      - JWT_SECRET=${JWT_SECRET:-banking-soc-jwt-secret-key}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-banking-soc-encryption-key}
+    
+    volumes:
+      # Configuration
+      - ./config/enrichment.yaml:/app/config/enrichment.yaml:ro
+      - ./prompts:/app/prompts:ro
+      
+      # Data and cache
+      - enrichment-data:/app/data
+      - enrichment-cache:/app/cache
+      - enrichment-logs:/app/logs
+      
+      # LLM models (for on-premises deployment)
+      - llm-models:/app/models
+      
+      # CVE databases
+      - cve-database:/app/data/cve
+      
+      # Threat intel feeds
+      - threat-intel-data:/app/data/threat-intel
+    
+    depends_on:
+      - redis.cache
+    
+    # Resource limits for LLM workloads
+    deploy:
+      resources:
+        limits:
+          cpus: '8.0'
+          memory: 16G
+        reservations:
+          cpus: '4.0'
+          memory: 8G
+    
+    # GPU support for local LLM (optional)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    
+    labels:
+      - "com.banking-soc.service=enrichment"
+      - "com.banking-soc.layer=intelligence"
+      - "com.banking-soc.zone=zone2-analytics"
+      - "com.banking-soc.llm=true"
+
+  # CVE Database Updater (runs periodically)
+  cve-updater:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/enrichment:latest
+    hostname: cve.updater
+    container_name: banking-soc-cve-updater
+    restart: "no"  # Run on schedule
+    
+    networks:
+      - soc-enrichment-network
+    
+    environment:
+      - ENRICHMENT_CONFIG=/app/config/enrichment.yaml
+      - PYTHONPATH=/app/src
+      - NVD_API_KEY=${NVD_API_KEY:-}
+    
+    volumes:
+      - ./config/enrichment.yaml:/app/config/enrichment.yaml:ro
+      - cve-database:/app/data/cve
+      - enrichment-logs:/app/logs
+    
+    command: ["python", "src/scripts/update_cve_database.py"]
+    
+    labels:
+      - "com.banking-soc.service=cve-updater"
+      - "com.banking-soc.layer=data-management"
+
+  # Threat Intel Sync (runs periodically)
+  threat-intel-sync:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/enrichment:latest
+    hostname: threatintel.sync
+    container_name: banking-soc-threatintel-sync
+    restart: "no"  # Run on schedule
+    
+    networks:
+      - soc-enrichment-network
+    
+    environment:
+      - ENRICHMENT_CONFIG=/app/config/enrichment.yaml
+      - PYTHONPATH=/app/src
+      - MISP_URL=${MISP_URL:-}
+      - MISP_API_KEY=${MISP_API_KEY:-}
+      - OPENCTI_URL=${OPENCTI_URL:-}
+      - OPENCTI_API_KEY=${OPENCTI_API_KEY:-}
+      - OTX_API_KEY=${OTX_API_KEY:-}
+    
+    volumes:
+      - ./config/enrichment.yaml:/app/config/enrichment.yaml:ro
+      - threat-intel-data:/app/data/threat-intel
+      - enrichment-logs:/app/logs
+    
+    command: ["python", "src/scripts/sync_threat_intel.py"]
+    
+    labels:
+      - "com.banking-soc.service=threat-intel-sync"
+      - "com.banking-soc.layer=data-management"
+
+  # MITRE ATT&CK Updater
+  mitre-updater:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: banking-soc/enrichment:latest
+    hostname: mitre.updater
+    container_name: banking-soc-mitre-updater
+    restart: "no"  # Run weekly
+    
+    networks:
+      - soc-enrichment-network
+    
+    environment:
+      - ENRICHMENT_CONFIG=/app/config/enrichment.yaml
+      - PYTHONPATH=/app/src
+    
+    volumes:
+      - ./config/enrichment.yaml:/app/config/enrichment.yaml:ro
+      - enrichment-data:/app/data
+      - enrichment-logs:/app/logs
+    
+    command: ["python", "src/scripts/update_mitre_attack.py"]
+    
+    labels:
+      - "com.banking-soc.service=mitre-updater"
+      - "com.banking-soc.layer=data-management"
+
+networks:
+  soc-analytics-network:
+    external: true
+    name: soc-analytics-network
+  soc-enrichment-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+    driver_opts:
+      com.docker.network.bridge.name: br-soc-enrichment
+
+volumes:
+  enrichment-data:
+    driver: local
+  enrichment-cache:
+    driver: local
+  enrichment-logs:
+    driver: local
+  llm-models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/banking-soc/llm-models
+  cve-database:
+    driver: local
+  threat-intel-data:
+    driver: local

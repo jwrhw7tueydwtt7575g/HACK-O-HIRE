@@ -1,0 +1,267 @@
+{
+  "banking_soc_logs": {
+    "index_patterns": ["banking-soc-logs-*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 2,
+        "number_of_replicas": 1,
+        "refresh_interval": "30s",
+        "index.mapping.total_fields.limit": 2000,
+        "index.mapping.nested_fields.limit": 100,
+        "index.max_result_window": 50000,
+        "index.codec": "best_compression",
+        "plugins.index_state_management.policy_id": "banking_soc_lifecycle_policy"
+      },
+      "mappings": {
+        "properties": {
+          "@timestamp": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "event_time": {
+            "type": "date",
+            "format": "strict_date_optional_time||epoch_millis"
+          },
+          "event_received_time": {
+            "type": "date"
+          },
+          "event_category": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              }
+            }
+          },
+          "zone": {
+            "type": "keyword"
+          },
+          "log_source": {
+            "type": "keyword"
+          },
+          "host": {
+            "type": "keyword"
+          },
+          "message": {
+            "type": "text",
+            "analyzer": "banking_analyzer",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 8192
+              }
+            }
+          },
+          "source_ip": {
+            "type": "ip"
+          },
+          "dest_ip": {
+            "type": "ip"
+          },
+          "user_id": {
+            "type": "keyword",
+            "fields": {
+              "text": {
+                "type": "text"
+              }
+            }
+          },
+          "account_id": {
+            "type": "keyword"
+          },
+          "transaction_amount": {
+            "type": "scaled_float",
+            "scaling_factor": 100
+          },
+          "risk_flags": {
+            "type": "keyword"
+          },
+          "risk_score": {
+            "type": "float"
+          },
+          "confidence_score": {
+            "type": "float"
+          },
+          "mitre_technique": {
+            "type": "keyword"
+          },
+          "mitre_tactic": {
+            "type": "keyword"
+          },
+          "event_fingerprint": {
+            "type": "keyword",
+            "index": false
+          },
+          "message_signature": {
+            "type": "keyword",
+            "index": false
+          },
+          "business_unit": {
+            "type": "keyword"
+          },
+          "compliance_frameworks": {
+            "type": "keyword"
+          },
+          "data_classification": {
+            "type": "keyword"
+          },
+          "privileged_operation": {
+            "type": "boolean"
+          },
+          "after_hours": {
+            "type": "boolean"
+          },
+          "geo_location": {
+            "type": "geo_point"
+          },
+          "source_country": {
+            "type": "keyword"
+          },
+          "source_asn": {
+            "type": "keyword"
+          },
+          "event_id": {
+            "type": "keyword"
+          },
+          "computer_name": {
+            "type": "keyword"
+          },
+          "security_id": {
+            "type": "keyword"
+          },
+          "logon_type": {
+            "type": "keyword"
+          },
+          "http_method": {
+            "type": "keyword"
+          },
+          "http_status_code": {
+            "type": "short"
+          },
+          "user_agent": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 512
+              }
+            }
+          },
+          "database_name": {
+            "type": "keyword"
+          },
+          "query_type": {
+            "type": "keyword"
+          },
+          "aws_region": {
+            "type": "keyword"
+          },
+          "event_name": {
+            "type": "keyword"
+          },
+          "user_identity": {
+            "type": "keyword"
+          },
+          "job_name": {
+            "type": "keyword"
+          },
+          "racf_event": {
+            "type": "keyword"
+          }
+        }
+      }
+    }
+  },
+  "wazuh_alerts": {
+    "index_patterns": ["wazuh-alerts-*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 1,
+        "refresh_interval": "10s",
+        "plugins.index_state_management.policy_id": "wazuh_alerts_lifecycle_policy"
+      },
+      "mappings": {
+        "properties": {
+          "@timestamp": {
+            "type": "date"
+          },
+          "agent": {
+            "properties": {
+              "id": {"type": "keyword"},
+              "name": {"type": "keyword"},
+              "ip": {"type": "ip"}
+            }
+          },
+          "rule": {
+            "properties": {
+              "id": {"type": "keyword"},
+              "level": {"type": "integer"},
+              "description": {"type": "text"},
+              "groups": {"type": "keyword"},
+              "mitre": {
+                "properties": {
+                  "tactic": {"type": "keyword"},
+                  "technique": {"type": "keyword"}
+                }
+              }
+            }
+          },
+          "full_log": {
+            "type": "text",
+            "fields": {
+              "keyword": {
+                "type": "keyword",
+                "ignore_above": 8192
+              }
+            }
+          },
+          "decoder": {
+            "properties": {
+              "name": {"type": "keyword"}
+            }
+          },
+          "location": {
+            "type": "keyword"
+          },
+          "cluster": {
+            "properties": {
+              "name": {"type": "keyword"},
+              "node": {"type": "keyword"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "banking_analytics": {
+    "index_patterns": ["banking-analytics-*"],
+    "template": {
+      "settings": {
+        "number_of_shards": 3,
+        "number_of_replicas": 1,
+        "refresh_interval": "60s",
+        "plugins.index_state_management.policy_id": "banking_analytics_lifecycle_policy"
+      },
+      "mappings": {
+        "properties": {
+          "@timestamp": {"type": "date"},
+          "analysis_type": {"type": "keyword"},
+          "entity_id": {"type": "keyword"},
+          "entity_type": {"type": "keyword"},
+          "baseline_score": {"type": "float"},
+          "anomaly_score": {"type": "float"},
+          "confidence": {"type": "float"},
+          "behavioral_features": {"type": "object"},
+          "ml_model_name": {"type": "keyword"},
+          "ml_model_version": {"type": "keyword"},
+          "feature_importance": {"type": "object"},
+          "related_alerts": {"type": "keyword"},
+          "investigation_notes": {"type": "text"},
+          "analyst_verdict": {"type": "keyword"},
+          "false_positive": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

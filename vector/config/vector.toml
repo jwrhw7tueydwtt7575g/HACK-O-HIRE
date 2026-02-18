@@ -1,0 +1,420 @@
+# Vector ETL Configuration for Enterprise Banking SOC
+# Zone 1 (Production) -> Zone 2 (SOC Analytics) Outbound-Only Pipeline
+
+data_dir = "/var/lib/vector"
+
+[api]
+enabled = true
+address = "0.0.0.0:8686"
+playground = false
+
+# GeoIP Enrichment Table (MaxMind)
+[enrichment_tables.geoip_table]
+type = "geoip"
+path = "/etc/vector/GeoLite2-City.mmdb"
+
+# =============================================================================
+# SOURCE CONFIGURATIONS - Zone 1 Banking Environment Log Producers
+# =============================================================================
+
+# Core Banking Applications - Transaction logs, auth attempts, funds transfers
+[sources.core_banking_apps]
+type = "socket"
+address = "0.0.0.0:5140"
+mode = "tcp"
+max_length = 1048576
+host_key = "banking_host"
+
+[sources.core_banking_apps_syslog]
+type = "syslog"
+address = "0.0.0.0:514"
+mode = "udp"
+
+# APIs / Web Portals - REST access logs, failed auth, rate limit events
+[sources.api_web_portals]
+type = "http_server"
+address = "0.0.0.0:8080"
+path = "/api/logs"
+method = "POST"
+headers = ["Authorization", "X-Forwarded-For", "User-Agent"]
+
+# Database Audit Logs - Query audits, privilege escalations, schema changes
+[sources.database_logs]
+type = "file"
+include = ["/var/log/banking/databases/*.log"]
+read_from = "end"
+ignore_older_secs = 600
+fingerprint.strategy = "device_and_inode"
+
+# Linux Servers - auth.log, syslog, SSH, sudo, cron, auditd
+[sources.linux_servers]
+type = "journald"
+journal_directory = "/var/log/journal"
+include_units = ["ssh", "sudo", "cron", "auditd"]
+
+[sources.linux_auth_logs]
+type = "file"
+include = ["/var/log/auth.log", "/var/log/secure"]
+read_from = "end"
+
+# Windows Servers - Security Event Logs, PowerShell, RDP, service changes
+[sources.windows_servers]
+type = "windows_event_log"
+query = '''
+<QueryList>
+  <Query Id="0">
+    <Select Path="Security">*[System[(EventID=4624 or EventID=4625 or EventID=4672 or EventID=5140)]]</Select>
+    <Select Path="Microsoft-Windows-PowerShell/Operational">*</Select>
+    <Select Path="System">*[System[Provider[@Name='Service Control Manager']]]</Select>
+  </Query>
+</QueryList>
+'''
+
+# Active Directory / IAM - User/group changes, Kerberos, password resets
+[sources.active_directory]
+type = "windows_event_log"
+query = '''
+<QueryList>
+  <Query Id="0">
+    <Select Path="Security">*[System[(EventID >= 4768 and EventID <= 4771) or EventID=4720 or EventID=4726 or EventID=4728 or EventID=4729]]</Select>
+  </Query>
+</QueryList>
+'''
+
+# Network Security - Firewall/IDS/IPS traffic, blocked IPs, VPN auth
+[sources.network_security]
+type = "socket"
+address = "0.0.0.0:5141"
+mode = "tcp"
+max_length = 2097152
+
+# Cloud (AWS/Azure/GCP) - CloudTrail, GuardDuty, IAM changes, console logins
+[sources.cloud_logs]
+type = "aws_s3"
+region = "us-east-1"
+bucket = "banking-soc-logs"
+key_prefix = "cloudtrail/"
+compression = "gzip"
+multiline.start_pattern = '^\{'
+
+# Mainframe z/OS - SMF records, RACF events, batch jobs, operator commands
+[sources.mainframe_logs]
+type = "socket"
+address = "0.0.0.0:5142"
+mode = "tcp"
+max_length = 4194304
+encoding = "utf8"
+
+# =============================================================================
+# TRANSFORM CONFIGURATIONS - Normalization & Enrichment Pipeline
+# =============================================================================
+
+# Universal Schema Normalization
+[transforms.normalize_core_banking]
+type = "remap"
+inputs = ["core_banking_apps", "core_banking_apps_syslog"]
+source = '''
+  # Parse banking app logs and normalize to standard schema
+  .event_category = "banking_transaction"
+  .zone = "zone1_production"
+  .log_source = "core_banking_apps"
+  
+  # Extract critical banking signals
+  if exists(.message) {
+    .transaction_amount = parse_regex(.message, r"amount:(?P<amount>\d+\.\d+)") ?? null
+    .account_id = parse_regex(.message, r"account:(?P<account>[A-Z0-9]+)") ?? null
+    .user_id = parse_regex(.message, r"user:(?P<user>[a-zA-Z0-9]+)") ?? null
+    .privileged_operation = contains(.message, "PRIVILEGED") || contains(.message, "ADMIN")
+    .after_hours = now() > parse_timestamp!(.timestamp, "%Y-%m-%d %H:%M:%S") + 18h || now() < parse_timestamp!(.timestamp, "%Y-%m-%d %H:%M:%S") + 6h
+  }
+  
+  # Risk scoring for fraud detection
+  if exists(.transaction_amount) && to_float(.transaction_amount) > 10000.0 {
+    .risk_flags = push(.risk_flags, "large_transfer")
+  }
+  
+  # Standardize timestamp
+  .@timestamp = now()
+  .event_time = .timestamp
+  .event_received_time = now()
+'''
+
+[transforms.normalize_api_logs]
+type = "remap"
+inputs = ["api_web_portals"]
+source = '''
+  .event_category = "api_access"
+  .zone = "zone1_production"
+  .log_source = "api_web_portals"
+  
+  # Extract API security signals
+  .http_method = .method
+  .http_status_code = .status
+  .source_ip = .client_ip
+  .user_agent = .headers."User-Agent"
+  
+  # Detect attack patterns
+  if contains(.path, "../") || contains(.path, "<script") {
+    .risk_flags = push(.risk_flags, "directory_traversal_xss")
+  }
+  
+  if .status >= 400 && .status < 500 {
+    .risk_flags = push(.risk_flags, "authentication_failure")
+  }
+  
+  .@timestamp = now()
+'''
+
+[transforms.normalize_database_logs]
+type = "remap"
+inputs = ["database_logs"]
+source = '''
+  .event_category = "database_audit"
+  .zone = "zone1_production"
+  .log_source = "database_systems"
+  
+  # Parse database activity
+  .database_name = parse_regex(.message, r"database:(?P<db>[a-zA-Z0-9_]+)") ?? "unknown"
+  .query_type = parse_regex(.message, r"(?P<type>SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)") ?? "unknown"
+  .user_account = parse_regex(.message, r"user:(?P<user>[a-zA-Z0-9_@\.]+)") ?? "unknown"
+  
+  # Flag suspicious activities
+  if .query_type == "DROP" || .query_type == "CREATE" || .query_type == "ALTER" {
+    .risk_flags = push(.risk_flags, "schema_modification")
+  }
+  
+  if contains(.message, "BULK") || contains(.message, "EXPORT") {
+    .risk_flags = push(.risk_flags, "bulk_data_access")
+  }
+  
+  .@timestamp = now()
+'''
+
+[transforms.normalize_windows_logs]
+type = "remap"
+inputs = ["windows_servers", "active_directory"]
+source = '''
+  .event_category = "windows_security"
+  .zone = "zone1_production"
+  .log_source = "windows_infrastructure"
+  
+  # Extract Windows security events
+  .event_id = .EventID
+  .computer_name = .Computer
+  .security_id = .SubjectUserSid
+  .logon_type = .LogonType
+  
+  # Map MITRE ATT&CK techniques
+  if .event_id == 4624 && .logon_type == 10 {
+    .mitre_technique = "T1021.001"  # Remote Desktop Protocol
+  }
+  
+  if .event_id == 4672 {
+    .risk_flags = push(.risk_flags, "privilege_escalation")
+    .mitre_technique = "T1078.002"  # Domain Accounts
+  }
+  
+  .@timestamp = now()
+'''
+
+[transforms.normalize_network_logs]
+type = "remap"
+inputs = ["network_security"]
+source = '''
+  .event_category = "network_security"
+  .zone = "zone1_production"
+  .log_source = "network_infrastructure"
+  
+  # Parse firewall/IDS logs
+  .source_ip = parse_regex(.message, r"src=(?P<ip>\d+\.\d+\.\d+\.\d+)") ?? null
+  .dest_ip = parse_regex(.message, r"dst=(?P<ip>\d+\.\d+\.\d+\.\d+)") ?? null
+  .dest_port = parse_regex(.message, r"dpt=(?P<port>\d+)") ?? null
+  .action = parse_regex(.message, r"action=(?P<action>ALLOW|DENY|DROP)") ?? null
+  
+  # GeoIP enrichment via MaxMind database
+  if exists(.source_ip) {
+    geoip_data, err = get_enrichment_table_record("geoip_table", {"ip": to_string(.source_ip)})
+    if err == null {
+      .source_country = geoip_data.country.iso_code ?? "unknown"
+      .source_city = geoip_data.city.names.en ?? "unknown"
+      .source_latitude = geoip_data.location.latitude ?? null
+      .source_longitude = geoip_data.location.longitude ?? null
+      .source_asn = to_string(geoip_data.autonomous_system_number ?? "unknown")
+    } else {
+      .source_country = "unknown"
+      .source_asn = "unknown"
+    }
+  }
+  
+  # Detect scanning and suspicious traffic
+  if .dest_port == "22" || .dest_port == "3389" || .dest_port == "1433" {
+    .risk_flags = push(.risk_flags, "critical_port_access")
+  }
+  
+  .@timestamp = now()
+'''
+
+[transforms.normalize_cloud_logs]
+type = "remap"
+inputs = ["cloud_logs"]
+source = '''
+  .event_category = "cloud_security"
+  .zone = "zone1_production"  
+  .log_source = "cloud_infrastructure"
+  
+  # Parse CloudTrail/Azure Activity logs
+  .aws_region = .awsRegion ?? null
+  .event_name = .eventName ?? null
+  .user_identity = .userIdentity.type ?? null
+  .source_ip = .sourceIPAddress ?? null
+  
+  # Flag privilege escalation and suspicious activities
+  if contains(.event_name, "Put") && contains(.event_name, "Policy") {
+    .risk_flags = push(.risk_flags, "iam_policy_change")
+    .mitre_technique = "T1098.001"  # Account Manipulation
+  }
+  
+  .@timestamp = now()
+'''
+
+[transforms.normalize_mainframe_logs]
+type = "remap"
+inputs = ["mainframe_logs"]
+source = '''
+  .event_category = "mainframe_security"
+  .zone = "zone1_production"
+  .log_source = "mainframe_systems"
+  
+  # Parse z/OS SMF and RACF logs
+  .job_name = parse_regex(.message, r"JOB=(?P<job>[A-Z0-9]+)") ?? null
+  .user_id = parse_regex(.message, r"USER=(?P<user>[A-Z0-9]+)") ?? null
+  .racf_event = parse_regex(.message, r"RACF-(?P<event>[A-Z0-9]+)") ?? null
+  
+  # Detect unauthorized access and mass data extraction
+  if contains(.message, "DATASET ACCESS") && contains(.message, "DENIED") {
+    .risk_flags = push(.risk_flags, "unauthorized_dataset_access")
+  }
+  
+  .@timestamp = now()
+'''
+
+# Unified Event Aggregation and Message Signing
+[transforms.aggregate_and_sign]
+type = "remap"
+inputs = [
+  "normalize_core_banking",
+  "normalize_api_logs", 
+  "normalize_database_logs",
+  "normalize_windows_logs",
+  "normalize_network_logs", 
+  "normalize_cloud_logs",
+  "normalize_mainframe_logs"
+]
+source = '''
+  # Add universal fields for SOC processing
+  .soc_pipeline_version = "1.0"
+  .data_classification = "CONFIDENTIAL"
+  .retention_policy = "7_years"
+  .processing_node = get_hostname()
+  
+  # Generate event fingerprint for deduplication
+  .event_fingerprint = encode_base64(sha256(to_string(.message) + to_string(.@timestamp)))
+  
+  # Message integrity signing (HMAC-SHA256)
+  .message_signature = encode_base64(hmac_sha256(to_string(.), "${VECTOR_HMAC_SECRET}"))
+  
+  # Rate limiting metadata
+  .rate_limit_key = .log_source + ":" + (.source_ip ?? .computer_name ?? .host ?? "unknown")
+  
+  # Business context tagging
+  .business_unit = "enterprise_banking"
+  .compliance_frameworks = ["PCI_DSS", "SOX", "BASEL_III"]
+'''
+
+# Deduplication Transform - uses event_fingerprint computed above
+[transforms.deduplicate]
+type = "dedupe"
+inputs = ["aggregate_and_sign"]
+fields.match = ["event_fingerprint"]
+cache.num_events = 10000
+
+# =============================================================================
+# SINK CONFIGURATIONS - Outbound to Zone 2 SOC Analytics
+# =============================================================================
+
+# Forward to Wazuh Manager (SIEM Detection Engine)
+[sinks.to_wazuh]
+type = "socket"
+inputs = ["deduplicate"]
+address = "wazuh-manager:1514"
+mode = "tcp"
+encoding.codec = "json"
+
+# TLS disabled for internal docker network communication
+# [sinks.to_wazuh.tls]
+# enabled = true
+# verify_certificate = true
+# verify_hostname = true
+# ca_file = "/etc/vector/tls/wazuh-ca.pem"
+# crt_file = "/etc/vector/tls/vector-client.crt"
+# key_file = "/etc/vector/tls/vector-client.key"
+
+# Forward to OpenSearch (Persistence and Analytics)
+[sinks.to_opensearch]
+type = "elasticsearch"
+inputs = ["deduplicate"]
+endpoints = ["http://opensearch:9200"]
+index = "banking-soc-logs-%Y-%m-%d"
+doc_type = "_doc"
+compression = "gzip"
+
+[sinks.to_opensearch.auth]
+strategy = "basic"
+user = "${OPENSEARCH_USERNAME:-admin}"
+password = "${OPENSEARCH_PASSWORD:-Admin123!@#}"
+
+# Backup to Local Storage (Compliance and DR)
+[sinks.local_backup]
+type = "file"
+inputs = ["deduplicate"]
+path = "/var/log/vector/banking-soc-backup-%Y-%m-%d.ndjson"
+encoding.codec = "ndjson"
+
+# Security monitoring and alerting
+[sinks.security_alerts]
+type = "http"
+inputs = ["deduplicate"]
+uri = "https://security-ops.internal/api/v1/alerts"
+method = "post"
+encoding.codec = "json"
+
+[sinks.security_alerts.request]
+headers.Authorization = "Bearer ${SOC_API_TOKEN}"
+headers.Content-Type = "application/json"
+
+# =============================================================================
+# CONFIGURATION VALIDATION AND HEALTH MONITORING
+# =============================================================================
+
+[transforms.health_metrics]
+type = "remap"
+inputs = ["aggregate_and_sign"]
+source = '''
+  # Generate metrics for SOC monitoring
+  .pipeline_latency_ms = to_timestamp(now()) - to_timestamp(.event_received_time)
+  .events_per_second = 1  # Will be aggregated by downstream systems
+  .error_rate = if exists(.error) { 1 } else { 0 }
+'''
+
+[sinks.metrics_export]
+type = "prometheus_exporter"
+inputs = ["health_metrics"] 
+address = "0.0.0.0:9598"
+namespace = "vector_banking_soc"
+
+# Dead Letter Queue - captures failed deliveries for retry/investigation
+[sinks.dead_letter_queue]
+type = "file"
+inputs = ["deduplicate"]
+path = "/var/log/vector/dlq/failed-events-%Y-%m-%d.ndjson"
+encoding.codec = "ndjson"
