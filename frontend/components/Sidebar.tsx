@@ -18,15 +18,17 @@ import {
   Lock,
   Laptop,
   Radio,
-  Key
+  Key,
+  Settings
 } from 'lucide-react'
 
 const NAVIGATION_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: BarChart3 },
-  { label: 'Alerts', href: '/dashboard/alerts', icon: Activity },
-  { label: 'Incidents', href: '/dashboard/incidents', icon: Shield },
+  { label: 'Dashboard',    href: '/dashboard',              icon: BarChart3 },
+  { label: 'Alerts',       href: '/dashboard/alerts',       icon: Activity },
+  { label: 'Incidents',    href: '/dashboard/incidents',    icon: Shield },
   { label: 'Integrations', href: '/dashboard/integrations', icon: Database },
-  { label: 'Reports', href: '/dashboard/reports', icon: BarChart3 }
+  { label: 'Reports',      href: '/dashboard/reports',      icon: BarChart3 },
+  { label: 'Settings',     href: '/dashboard/settings',     icon: Settings },
 ]
 
 const SERVICE_ICONS: Record<string, any> = {

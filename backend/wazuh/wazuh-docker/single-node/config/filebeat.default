@@ -1,0 +1,2 @@
+# Override Filebeat daemon args to disable strict permission checks
+DAEMON_ARGS="-c /etc/filebeat/filebeat.yml --path.home /usr/share/filebeat --path.config /etc/filebeat --path.data /var/lib/filebeat --path.logs /var/log/filebeat -strict.perms=false"

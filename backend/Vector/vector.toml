@@ -1,0 +1,294 @@
+data_dir = "/var/lib/vector"
+
+[sources.core_banking]
+type = "file"
+include = ["/logs/core_banking.jsonl"]
+read_from = "beginning"
+
+[sources.api_web_json]
+type = "file"
+include = ["/logs/api_web.jsonl"]
+read_from = "beginning"
+
+[sources.api_web_cef]
+type = "file"
+include = ["/logs/api_web.cef"]
+read_from = "beginning"
+
+[sources.databases]
+type = "file"
+include = ["/logs/databases.jsonl"]
+read_from = "beginning"
+
+[sources.linux_syslog]
+type = "file"
+include = ["/logs/linux_syslog.log"]
+read_from = "beginning"
+
+[sources.windows_events]
+type = "file"
+include = ["/logs/windows_events.xml"]
+read_from = "beginning"
+
+[sources.active_directory]
+type = "file"
+include = ["/logs/active_directory.xml"]
+read_from = "beginning"
+
+[transforms.core_banking_parse]
+type = "remap"
+inputs = ["core_banking"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.core_banking_norm]
+type = "remap"
+inputs = ["core_banking_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["financial"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "core_banking"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.destination.ip = .dest_ip
+.user.name = .user
+.host.hostname = .host
+.log.level = .level
+"""
+
+[transforms.api_web_json_parse]
+type = "remap"
+inputs = ["api_web_json"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.api_web_json_norm]
+type = "remap"
+inputs = ["api_web_json_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["web"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "api_web"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.destination.ip = .dest_ip
+.user.name = .user
+.http.request.method = .method
+.url.path = .path
+.http.response.status_code = .status
+.user_agent.original = .user_agent
+.network.bytes = .bytes
+.log.level = .level
+"""
+
+[transforms.api_web_cef_parse]
+type = "remap"
+inputs = ["api_web_cef"]
+source = """
+. = parse_cef!(.message)
+"""
+
+[transforms.api_web_cef_norm]
+type = "remap"
+inputs = ["api_web_cef_parse"]
+source = """
+.@timestamp = now()
+.event.kind = "event"
+.event.category = ["web"]
+.event.action = .name
+.event.type = ["cef"]
+.event.dataset = "api_web"
+.ecs.version = "8.11.0"
+src_ip, src_err = get(.extensions, ["src"])
+dst_ip, dst_err = get(.extensions, ["dst"])
+req_method, req_err = get(.extensions, ["requestMethod"])
+req_path, path_err = get(.extensions, ["request"])
+if src_err == null { .source.ip = to_string!(src_ip) }
+if dst_err == null { .destination.ip = to_string!(dst_ip) }
+if req_err == null { .http.request.method = to_string!(req_method) }
+if path_err == null { .url.path = to_string!(req_path) }
+sev, sev_err = to_int(.severity)
+if sev_err != null { sev = 0 }
+.log.level = if sev >= 7 { "warning" } else { "info" }
+"""
+
+[transforms.databases_parse]
+type = "remap"
+inputs = ["databases"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.databases_norm]
+type = "remap"
+inputs = ["databases_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["database"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "databases"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.destination.ip = .dest_ip
+.user.name = .user
+.db.name = .database
+.db.schema = .schema
+.db.table = .table
+.log.level = .level
+"""
+
+[transforms.linux_syslog_parse]
+type = "remap"
+inputs = ["linux_syslog"]
+source = """
+parsed = parse_syslog!(.message)
+. = parsed
+.message = parsed.msg
+"""
+
+[transforms.linux_syslog_norm]
+type = "remap"
+inputs = ["linux_syslog_parse"]
+source = """
+if is_timestamp(.timestamp) {
+	.@timestamp = .timestamp
+} else {
+	.@timestamp = parse_timestamp!(.timestamp, "%+")
+}
+.event.kind = "event"
+.event.category = ["host"]
+.event.action = .appname
+.event.type = ["syslog"]
+.event.dataset = "linux_syslog"
+.ecs.version = "8.11.0"
+.host.hostname = .hostname
+.process.name = .appname
+.log.level = "info"
+"""
+
+[transforms.windows_xml_parse]
+type = "remap"
+inputs = ["windows_events"]
+source = """
+.xml = parse_xml!(.message)
+"""
+
+[transforms.windows_xml_norm]
+type = "remap"
+inputs = ["windows_xml_parse"]
+source = """
+.@timestamp = parse_timestamp!(.xml.Event.System.TimeCreated, "%+")
+.event.kind = "event"
+.event.category = ["authentication", "host"]
+.event.action = .xml.Event.EventData.Action
+.event.type = ["windows"]
+.event.dataset = "windows_security"
+.ecs.version = "8.11.0"
+.event.code = to_int!(.xml.Event.System.EventID)
+.host.hostname = .xml.Event.System.Computer
+.user.name = .xml.Event.EventData.TargetUserName
+.source.ip = .xml.Event.EventData.IpAddress
+.event.outcome = .xml.Event.EventData.Status
+"""
+
+[transforms.ad_xml_parse]
+type = "remap"
+inputs = ["active_directory"]
+source = """
+.xml = parse_xml!(.message)
+"""
+
+[transforms.ad_xml_norm]
+type = "remap"
+inputs = ["ad_xml_parse"]
+source = """
+.@timestamp = parse_timestamp!(.xml.Event.System.TimeCreated, "%+")
+.event.kind = "event"
+.event.category = ["iam"]
+.event.action = .xml.Event.EventData.Action
+.event.type = ["windows"]
+.event.dataset = "active_directory"
+.ecs.version = "8.11.0"
+.event.code = to_int!(.xml.Event.System.EventID)
+.host.hostname = .xml.Event.System.Computer
+.user.name = .xml.Event.EventData.TargetUserName
+.source.ip = .xml.Event.EventData.IpAddress
+.event.outcome = .xml.Event.EventData.Status
+"""
+
+[transforms.enrich]
+type = "remap"
+inputs = [
+	"core_banking_norm",
+	"api_web_json_norm",
+	"api_web_cef_norm",
+	"databases_norm",
+	"linux_syslog_norm",
+	"windows_xml_norm",
+	"ad_xml_norm",
+]
+source = """
+geo_lookup = {
+	"198.51.100.10": {"country_name": "US", "city_name": "New York", "location": {"lat": 40.7128, "lon": -74.0060}},
+	"198.51.100.12": {"country_name": "US", "city_name": "Chicago", "location": {"lat": 41.8781, "lon": -87.6298}},
+	"198.51.100.14": {"country_name": "US", "city_name": "San Francisco", "location": {"lat": 37.7749, "lon": -122.4194}},
+	"203.0.113.20": {"country_name": "GB", "city_name": "London", "location": {"lat": 51.5072, "lon": -0.1276}},
+	"203.0.113.23": {"country_name": "DE", "city_name": "Berlin", "location": {"lat": 52.5200, "lon": 13.4050}},
+	"203.0.113.25": {"country_name": "FR", "city_name": "Paris", "location": {"lat": 48.8566, "lon": 2.3522}},
+	"203.0.113.40": {"country_name": "IN", "city_name": "Mumbai", "location": {"lat": 19.0760, "lon": 72.8777}},
+	"203.0.113.50": {"country_name": "US", "city_name": "Seattle", "location": {"lat": 47.6062, "lon": -122.3321}},
+	"203.0.113.60": {"country_name": "US", "city_name": "Ashburn", "location": {"lat": 39.0438, "lon": -77.4874}},
+	"203.0.113.64": {"country_name": "US", "city_name": "Dallas", "location": {"lat": 32.7767, "lon": -96.7970}}
+}
+geo, geo_err = get(geo_lookup, [.source.ip])
+if geo_err == null && geo != null { .geo = geo }
+
+threat_lookup = {
+	"203.0.113.23": {"threat_type": "sql_injection", "confidence": 85, "source": "local_misp"},
+	"203.0.113.25": {"threat_type": "bruteforce", "confidence": 80, "source": "local_misp"},
+	"203.0.113.42": {"threat_type": "ssh_bruteforce", "confidence": 75, "source": "abuseipdb_cache"},
+	"203.0.113.54": {"threat_type": "pass_the_hash", "confidence": 90, "source": "local_misp"},
+	"203.0.113.56": {"threat_type": "powershell_obfuscation", "confidence": 88, "source": "local_misp"},
+	"203.0.113.63": {"threat_type": "kerberos_attack", "confidence": 82, "source": "local_misp"}
+}
+ti, ti_err = get(threat_lookup, [.source.ip])
+if ti_err == null && ti != null {
+	.threat = {
+		"indicator": {
+			"type": "ipv4-addr",
+			"ip": .source.ip,
+			"name": ti.threat_type
+		},
+		"confidence": ti.confidence,
+		"feed": {"name": ti.source}
+	}
+}
+"""
+
+[transforms.schema_route]
+type = "route"
+inputs = ["enrich"]
+route.valid = 'exists(.@timestamp) && exists(.event.kind) && exists(.source.ip)'
+route.invalid = '!exists(.@timestamp) || !exists(.event.kind) || !exists(.source.ip)'
+
+[sinks.clean_output]
+type = "file"
+inputs = ["schema_route.valid"]
+path = "/vector-output/clean.json"
+encoding.codec = "json"
+
+[sinks.quarantine_output]
+type = "file"
+inputs = ["schema_route.invalid"]
+path = "/vector-output/quarantine.json"
+encoding.codec = "json"

@@ -1,0 +1,7 @@
+ip,threat_type,confidence,source
+203.0.113.23,sql_injection,85,local_misp
+203.0.113.25,bruteforce,80,local_misp
+203.0.113.42,ssh_bruteforce,75,abuseipdb_cache
+203.0.113.54,pass_the_hash,90,local_misp
+203.0.113.56,powershell_obfuscation,88,local_misp
+203.0.113.63,kerberos_attack,82,local_misp

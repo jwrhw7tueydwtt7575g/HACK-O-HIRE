@@ -1,5 +1,8 @@
 import { ServiceStatus } from './types'
 
+// Fixed reference date prevents SSR/CSR hydration mismatches
+const SEED_DATE = new Date('2026-02-18T00:00:00Z')
+
 export const SERVICES: ServiceStatus[] = [
   {
     id: 'wazuh',
@@ -7,7 +10,7 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Shield',
     status: 'healthy',
     uptime: 99.95,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://wazuh.example.com',
     description: 'Threat Detection & Response'
   },
@@ -17,7 +20,7 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Database',
     status: 'healthy',
     uptime: 99.98,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://opensearch.example.com',
     description: 'Log Analytics & Search'
   },
@@ -27,9 +30,9 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Brain',
     status: 'healthy',
     uptime: 99.87,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://ai.example.com',
-    description: 'Threat Intelligence Engine'
+    description: 'UEBA + Anomaly Detection Engine'
   },
   {
     id: 'soar',
@@ -37,29 +40,29 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Zap',
     status: 'healthy',
     uptime: 99.92,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://soar.example.com',
     description: 'Security Automation & Response'
   },
   {
-    id: 'siem',
-    name: 'SIEM System',
+    id: 'enrichment',
+    name: 'Enrichment Layer',
     icon: 'Activity',
-    status: 'degraded',
-    uptime: 98.5,
-    lastCheck: new Date(),
-    dashboardUrl: 'https://siem.example.com',
-    description: 'Security Information & Event Management'
+    status: 'healthy',
+    uptime: 99.80,
+    lastCheck: SEED_DATE,
+    dashboardUrl: 'https://enrichment.example.com',
+    description: 'CVE/IOC/LLM Playbook Generation'
   },
   {
-    id: 'dlp',
-    name: 'DLP Engine',
-    icon: 'Lock',
+    id: 'vector',
+    name: 'Vector ETL',
+    icon: 'ArrowRightLeft',
     status: 'healthy',
-    uptime: 99.91,
-    lastCheck: new Date(),
-    dashboardUrl: 'https://dlp.example.com',
-    description: 'Data Loss Prevention'
+    uptime: 99.97,
+    lastCheck: SEED_DATE,
+    dashboardUrl: 'http://localhost:8686',
+    description: 'Log Normalization & Enrichment'
   },
   {
     id: 'edr',
@@ -67,7 +70,7 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Laptop',
     status: 'healthy',
     uptime: 99.94,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://edr.example.com',
     description: 'Endpoint Detection & Response'
   },
@@ -77,7 +80,7 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Radio',
     status: 'healthy',
     uptime: 99.89,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://ndr.example.com',
     description: 'Network Detection & Response'
   },
@@ -87,7 +90,7 @@ export const SERVICES: ServiceStatus[] = [
     icon: 'Key',
     status: 'healthy',
     uptime: 99.99,
-    lastCheck: new Date(),
+    lastCheck: SEED_DATE,
     dashboardUrl: 'https://vault.example.com',
     description: 'Secrets Management'
   }

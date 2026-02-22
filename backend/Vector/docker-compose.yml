@@ -1,0 +1,18 @@
+version: "3.9"
+services:
+  vector:
+    image: timberio/vector:0.37.1-alpine
+    container_name: enterprise-vector
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml:ro
+      - ./enrichment:/etc/vector/enrichment:ro
+      - ../Log_Producers/logs:/logs:ro
+      - ../vector_output:/vector-output
+    command: ["-c", "/etc/vector/vector.toml"]
+    networks:
+      - enterprise-soc
+
+networks:
+  enterprise-soc:
+    name: enterprise-soc
+    external: true
