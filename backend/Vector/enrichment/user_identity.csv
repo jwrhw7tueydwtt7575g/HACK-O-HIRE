@@ -1,0 +1,6 @@
+user_name,user_id,display_name,department
+jdoe,UID-1001,John Doe,IT
+asmith,UID-1002,Alice Smith,Finance
+bpatel,UID-1003,Bhavin Patel,Risk
+mjones,UID-1004,Mary Jones,Security
+svc_backup,UID-9001,Backup Service,Operations

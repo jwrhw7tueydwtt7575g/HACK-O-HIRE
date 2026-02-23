@@ -14,6 +14,11 @@ type = "file"
 file.path = "/etc/vector/enrichment/threat_intel.csv"
 file.encoding.type = "csv"
 
+[enrichment_tables.user_identity]
+type = "file"
+file.path = "/etc/vector/enrichment/user_identity.csv"
+file.encoding.type = "csv"
+
 [sources.core_banking]
 type = "file"
 include = ["/logs/core_banking.jsonl"]
@@ -520,6 +525,15 @@ if ti_err == null && ti != null {
 		},
 		"confidence": ti.confidence,
 		"feed": {"name": ti.source}
+	}
+}
+
+if exists(.user) && exists(.user.name) && !is_null(.user.name) && .user.name != "" {
+	user_identity, user_identity_err = get_enrichment_table_record("user_identity", {"user_name": .user.name})
+	if user_identity_err == null && user_identity != null && !is_null(user_identity.user_id) && user_identity.user_id != "" {
+		.user.id = user_identity.user_id
+	} else {
+		.user.id = "UNKNOWN-" + string!(.user.name)
 	}
 }
 """
