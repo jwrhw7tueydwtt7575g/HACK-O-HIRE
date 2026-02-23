@@ -1,0 +1,81 @@
+<!-- ============================================================
+     CUSTOM RULES: Geo Anomaly Detection
+     File: 0004-geo_anomaly_rules.xml
+     These rules do NOT exist in Wazuh by default.
+     Wazuh has zero geo-awareness out of the box.
+     Vector enriches logs with geo.country_name from GeoLite2.
+     These rules match on that enriched field.
+     ============================================================ -->
+
+<group name="local,custom">
+
+  <!-- ── Base: Any event with geo data ── -->
+  <rule id="100300" level="3">
+    <field name="geo.country_name">\.+</field>
+    <description>Geo: Event with geolocation data received</description>
+    <group>geo</group>
+  </rule>
+
+  <!-- ── Access from high-risk country ── -->
+  <!-- Adjust country list based on your org's policy -->
+  <rule id="100301" level="11">
+    <if_sid>100300</if_sid>
+    <field name="geo.country_name" type="pcre2">^(CN|RU|KP|IR|NG|BY|SY)$</field>
+    <description>Geo: Access from high-risk country detected</description>
+    <group>geo,suspicious</group>
+  </rule>
+
+  <!-- ── High-risk country accessing banking ── -->
+  <rule id="100302" level="14">
+    <if_sid>100301</if_sid>
+    <field name="event.dataset">core_banking</field>
+    <description>Geo: High-risk country accessing CORE BANKING system</description>
+    <group>geo,banking,suspicious</group>
+  </rule>
+
+  <!-- ── High-risk country + fraud flag ── -->
+  <rule id="100303" level="15">
+    <if_sid>100302</if_sid>
+    <field name="fraud_flag">true</field>
+    <description>CRITICAL: Fraudulent banking transaction from high-risk country</description>
+    <group>geo,banking,fraud,critical</group>
+  </rule>
+
+  <!-- ── High-risk country + threat intel hit ── -->
+  <rule id="100304" level="15">
+    <if_sid>100301</if_sid>
+    <field name="threat.indicator.type">ipv4-addr</field>
+    <description>CRITICAL: High-risk country AND known malicious IP - double hit</description>
+    <group>geo,threat_intel,critical</group>
+  </rule>
+
+  <!-- ── Access from unexpected European country (not UK) to banking ── -->
+  <!-- UK is expected (London office), others flag for review -->
+  <rule id="100305" level="12">
+    <if_sid>100300</if_sid>
+    <field name="geo.country_name" type="pcre2">^(DE|FR|NL|PL|RO|HU|CZ)$</field>
+    <field name="event.dataset">core_banking</field>
+    <description>Geo: Banking access from unexpected European country</description>
+    <group>geo,banking,suspicious</group>
+  </rule>
+
+  <!-- ── Access from India to banking (flag for review) ── -->
+  <rule id="100306" level="11">
+    <if_sid>100300</if_sid>
+    <field name="geo.country_name">IN</field>
+    <field name="event.dataset">core_banking</field>
+    <description>Geo: Banking access from India - review required</description>
+    <group>geo,banking</group>
+  </rule>
+
+  <!-- ── Non-US/UK geo accessing Windows admin systems ── -->
+  <rule id="100307" level="13">
+    <if_sid>100300</if_sid>
+    <field name="event.dataset">windows_security</field>
+    <field name="geo.country_name" type="pcre2">^(?!US|GB).*$</field>
+    <field name="event.action">privileged_logon</field>
+    <description>Geo: Privileged Windows logon from non-US/UK location</description>
+    <group>geo,windows,suspicious</group>
+  </rule>
+
+</group>

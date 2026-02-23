@@ -1,0 +1,125 @@
+<!-- ============================================================
+     CUSTOM RULES: Database Activity Audit
+     File: 0003-database_rules.xml
+     These rules do NOT exist in Wazuh by default.
+     Covers: bulk exports, schema changes, privilege grants,
+             failed logins, off-hours DDL, suspicious queries
+     ============================================================ -->
+
+<group name="local,custom">
+
+  <!-- ── Base: Any database event ── -->
+  <rule id="100200" level="3">
+    <field name="event.dataset">databases</field>
+    <description>Database: Audit event received</description>
+    <group>database</group>
+  </rule>
+
+  <!-- ── Bulk Export (Data Exfiltration Risk) ── -->
+  <rule id="100201" level="14">
+    <if_sid>100200</if_sid>
+    <field name="event.action">bulk_export</field>
+    <description>Database: Bulk data export detected - possible data exfiltration</description>
+    <group>database,exfiltration,pci_dss</group>
+  </rule>
+
+  <!-- ── Bulk Export with very high row count ── -->
+  <rule id="100202" level="15">
+    <if_sid>100201</if_sid>
+    <field name="rows" type="pcre2">^[1-9][0-9]{5,}</field>
+    <description>CRITICAL: Massive bulk export (100k+ rows) - active data exfiltration suspected</description>
+    <group>database,exfiltration,critical</group>
+  </rule>
+
+  <!-- ── Schema Change (DDL) ── -->
+  <rule id="100203" level="11">
+    <if_sid>100200</if_sid>
+    <field name="event.type">schema</field>
+    <description>Database: Schema change (DDL) operation performed</description>
+    <group>database,schema_change</group>
+  </rule>
+
+  <!-- ── Schema Change During Off Hours ── -->
+  <rule id="100204" level="14">
+    <if_sid>100203</if_sid>
+    <field name="off_hours">true</field>
+    <description>Database: Schema change performed DURING OFF HOURS - requires review</description>
+    <group>database,schema_change,after_hours,suspicious</group>
+  </rule>
+
+  <!-- ── ALTER TABLE specifically ── -->
+  <rule id="100205" level="12">
+    <if_sid>100200</if_sid>
+    <field name="event.action">alter_table</field>
+    <description>Database: Table structure altered</description>
+    <group>database,schema_change</group>
+  </rule>
+
+  <!-- ── ALTER TABLE on financial table off hours ── -->
+  <rule id="100206" level="15">
+    <if_sid>100205</if_sid>
+    <field name="off_hours">true</field>
+    <field name="db.name">core_ledger</field>
+    <description>CRITICAL: Core ledger table altered during off hours</description>
+    <group>database,schema_change,after_hours,banking,critical</group>
+  </rule>
+
+  <!-- ── Privilege Grant ── -->
+  <rule id="100207" level="12">
+    <if_sid>100200</if_sid>
+    <field name="event.action">grant</field>
+    <description>Database: Privilege GRANTED to user - review required</description>
+    <group>database,privilege_escalation</group>
+  </rule>
+
+  <!-- ── Privilege Grant to Sensitive Users ── -->
+  <rule id="100208" level="14">
+    <if_sid>100207</if_sid>
+    <field name="target_user" type="pcre2">temp_user|unknown|etl_user|test</field>
+    <description>Database: Privilege granted to sensitive/temp user account</description>
+    <group>database,privilege_escalation,suspicious</group>
+  </rule>
+
+  <!-- ── Privilege Revoke ── -->
+  <rule id="100209" level="10">
+    <if_sid>100200</if_sid>
+    <field name="event.action">revoke</field>
+    <description>Database: Privilege REVOKED from user</description>
+    <group>database,privilege_change</group>
+  </rule>
+
+  <!-- ── Failed Login to Database ── -->
+  <rule id="100210" level="10">
+    <if_sid>100200</if_sid>
+    <field name="event.action">login_failed</field>
+    <description>Database: Failed authentication attempt</description>
+    <group>database,auth</group>
+  </rule>
+
+  <!-- ── Failed Login as Unknown User ── -->
+  <rule id="100211" level="13">
+    <if_sid>100210</if_sid>
+    <field name="user.name">unknown</field>
+    <description>Database: Failed login attempt by unknown user - enumeration suspected</description>
+    <group>database,auth,suspicious</group>
+  </rule>
+
+  <!-- ── DELETE on sensitive tables ── -->
+  <rule id="100212" level="13">
+    <if_sid>100200</if_sid>
+    <field name="event.action">delete</field>
+    <field name="db.name">fraud|core_ledger</field>
+    <description>Database: DELETE operation on sensitive financial database</description>
+    <group>database,suspicious,pci_dss</group>
+  </rule>
+
+  <!-- ── Access to core_ledger transactions table ── -->
+  <rule id="100213" level="11">
+    <if_sid>100200</if_sid>
+    <field name="db.name">core_ledger</field>
+    <field name="db.table">transactions</field>
+    <description>Database: Access to core ledger transactions table logged</description>
+    <group>database,financial,pci_dss</group>
+  </rule>
+
+</group>

@@ -31,7 +31,7 @@ services:
     volumes:
       - wazuh_api_configuration:/var/ossec/api/configuration
       - wazuh_etc:/var/ossec/etc
-      - wazuh_logs:/var/ossec/logs
+      - "../../../wazuh output:/var/ossec/logs"
       - wazuh_queue:/var/ossec/queue
       - wazuh_var_multigroups:/var/ossec/var/multigroups
       - wazuh_integrations:/var/ossec/integrations
@@ -41,6 +41,8 @@ services:
       - filebeat_etc:/etc/filebeat
       - filebeat_var:/var/lib/filebeat
       - ../../../vector_output:/var/ossec/logs/ingest:ro
+      - ../../Custom_Rules/files:/var/ossec/etc/rules:ro
+      - ../../Custom_Decoders:/var/ossec/etc/decoders:ro
       - ./config/filebeat.yml:/etc/filebeat/filebeat.yml
       - ./config/filebeat.default:/etc/default/filebeat
       - ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
@@ -86,7 +88,7 @@ services:
     environment:
       - INDEXER_USERNAME=admin
       - INDEXER_PASSWORD=SecretPassword
-      - WAZUH_API_URL=https://wazuh.manager
+      - WAZUH_API_URL=https://wazuh.manager:55000
       - DASHBOARD_USERNAME=kibanaserver
       - DASHBOARD_PASSWORD=kibanaserver
       - API_USERNAME=wazuh-wui
@@ -110,7 +112,6 @@ services:
 volumes:
   wazuh_api_configuration:
   wazuh_etc:
-  wazuh_logs:
   wazuh_queue:
   wazuh_var_multigroups:
   wazuh_integrations:

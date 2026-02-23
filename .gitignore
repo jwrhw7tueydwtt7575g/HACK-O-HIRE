@@ -1,0 +1,13 @@
+# Generated logs and outputs
+backend/Log_Producers/logs/
+backend/vector_output/
+backend/wazuh output/
+backend/wazuh/wazuh output/
+
+# GeoLite2 databases and archives
+backend/Vector/enrichment/GeoLite2-City.mmdb
+backend/Vector/enrichment/GeoLite2-City_*.tar.gz
+backend/Vector/enrichment/GeoLite2-City_*/
+
+# OS files
+.DS_Store

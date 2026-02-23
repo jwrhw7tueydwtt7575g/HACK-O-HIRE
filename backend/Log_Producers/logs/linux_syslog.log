@@ -1,10 +1,50 @@
-<34>1 2026-02-20T11:00:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
-<34>1 2026-02-20T11:02:00+00:00 linux-core-01 sshd 2413 ID47 - Accepted password for ops from 203.0.113.41 port 44211 ssh2
+<34>1 2026-02-20T11:00:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:01:00+00:00 linux-core-04 cron 411 ID47 - (root) CMD (/usr/bin/apt update)
+<34>1 2026-02-20T11:02:00+00:00 linux-core-04 cron 411 ID47 - (root) CMD (/usr/bin/apt update)
+<34>1 2026-02-20T11:03:00+00:00 linux-core-03 auditd 510 ID47 - ANOM_ABEND auid=1001 uid=0 exe="/usr/bin/sudo" msg='kernel exploit attempt'
 <34>1 2026-02-20T11:04:00+00:00 linux-core-02 sudo 312 ID47 - ops : TTY=pts/1 ; PWD=/home/ops ; USER=root ; COMMAND=/bin/cat /etc/shadow
-<34>1 2026-02-20T11:06:00+00:00 linux-core-02 cron 410 ID47 - (root) CMD (/usr/local/bin/backup.sh)
-<34>1 2026-02-20T11:08:00+00:00 linux-core-03 auditd 510 ID47 - ANOM_ABEND auid=1001 uid=0 exe="/usr/bin/sudo" msg='kernel exploit attempt'
-<34>1 2026-02-20T11:10:00+00:00 linux-core-03 sshd 2414 ID47 - Failed password for root from 203.0.113.42 port 55220 ssh2
-<34>1 2026-02-20T11:12:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
-<34>1 2026-02-20T11:14:00+00:00 linux-core-04 cron 411 ID47 - (root) CMD (/usr/bin/apt update)
-<34>1 2026-02-20T11:16:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
-<34>1 2026-02-20T11:18:00+00:00 linux-core-05 auditd 511 ID47 - USER_ACCT pid=2201 uid=0 auid=1002 msg='root login'
+<34>1 2026-02-20T11:05:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:06:00+00:00 linux-core-03 auditd 510 ID47 - ANOM_ABEND auid=1001 uid=0 exe="/usr/bin/sudo" msg='kernel exploit attempt'
+<34>1 2026-02-20T11:07:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:08:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:09:00+00:00 linux-core-05 auditd 511 ID47 - USER_ACCT pid=2201 uid=0 auid=1002 msg='root login'
+<34>1 2026-02-20T11:10:00+00:00 linux-core-02 cron 410 ID47 - (root) CMD (/usr/local/bin/backup.sh)
+<34>1 2026-02-20T11:11:00+00:00 linux-core-02 sudo 312 ID47 - ops : TTY=pts/1 ; PWD=/home/ops ; USER=root ; COMMAND=/bin/cat /etc/shadow
+<34>1 2026-02-20T11:12:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:13:00+00:00 linux-core-01 sshd 2413 ID47 - Accepted password for ops from 203.0.113.41 port 44211 ssh2
+<34>1 2026-02-20T11:14:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:15:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:16:00+00:00 linux-core-01 sshd 2413 ID47 - Accepted password for ops from 203.0.113.41 port 44211 ssh2
+<34>1 2026-02-20T11:17:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:18:00+00:00 linux-core-03 sshd 2414 ID47 - Failed password for root from 203.0.113.42 port 55220 ssh2
+<34>1 2026-02-20T11:19:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:20:00+00:00 linux-core-05 auditd 511 ID47 - USER_ACCT pid=2201 uid=0 auid=1002 msg='root login'
+<34>1 2026-02-20T11:21:00+00:00 linux-core-02 sudo 312 ID47 - ops : TTY=pts/1 ; PWD=/home/ops ; USER=root ; COMMAND=/bin/cat /etc/shadow
+<34>1 2026-02-20T11:22:00+00:00 linux-core-03 sshd 2414 ID47 - Failed password for root from 203.0.113.42 port 55220 ssh2
+<34>1 2026-02-20T11:23:00+00:00 linux-core-02 sudo 312 ID47 - ops : TTY=pts/1 ; PWD=/home/ops ; USER=root ; COMMAND=/bin/cat /etc/shadow
+<34>1 2026-02-20T11:24:00+00:00 linux-core-01 sshd 2413 ID47 - Accepted password for ops from 203.0.113.41 port 44211 ssh2
+<34>1 2026-02-20T11:25:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:26:00+00:00 linux-core-01 sshd 2413 ID47 - Accepted password for ops from 203.0.113.41 port 44211 ssh2
+<34>1 2026-02-20T11:27:00+00:00 linux-core-05 auditd 511 ID47 - USER_ACCT pid=2201 uid=0 auid=1002 msg='root login'
+<34>1 2026-02-20T11:28:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:29:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:30:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:31:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:32:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:33:00+00:00 linux-core-04 cron 411 ID47 - (root) CMD (/usr/bin/apt update)
+<34>1 2026-02-20T11:34:00+00:00 linux-core-02 cron 410 ID47 - (root) CMD (/usr/local/bin/backup.sh)
+<34>1 2026-02-20T11:35:00+00:00 linux-core-02 cron 410 ID47 - (root) CMD (/usr/local/bin/backup.sh)
+<34>1 2026-02-20T11:36:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:37:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:38:00+00:00 linux-core-02 cron 410 ID47 - (root) CMD (/usr/local/bin/backup.sh)
+<34>1 2026-02-20T11:39:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:40:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:41:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:42:00+00:00 linux-core-05 auditd 511 ID47 - USER_ACCT pid=2201 uid=0 auid=1002 msg='root login'
+<34>1 2026-02-20T11:43:00+00:00 linux-core-04 sudo 313 ID47 - audit : TTY=pts/0 ; PWD=/ ; USER=root ; COMMAND=/bin/chmod 777 /etc/sudoers
+<34>1 2026-02-20T11:44:00+00:00 linux-core-05 sshd 2415 ID47 - Accepted publickey for svc-deploy from 203.0.113.43 port 55221 ssh2
+<34>1 2026-02-20T11:45:00+00:00 linux-core-01 sshd 2412 ID47 - Failed password for invalid user admin from 203.0.113.40 port 44210 ssh2
+<34>1 2026-02-20T11:46:00+00:00 linux-core-03 sshd 2414 ID47 - Failed password for root from 203.0.113.42 port 55220 ssh2
+<34>1 2026-02-20T11:47:00+00:00 linux-core-02 cron 410 ID47 - (root) CMD (/usr/local/bin/backup.sh)
+<34>1 2026-02-20T11:48:00+00:00 linux-core-04 cron 411 ID47 - (root) CMD (/usr/bin/apt update)
+<34>1 2026-02-20T11:49:00+00:00 linux-core-01 sshd 2413 ID47 - Accepted password for ops from 203.0.113.41 port 44211 ssh2

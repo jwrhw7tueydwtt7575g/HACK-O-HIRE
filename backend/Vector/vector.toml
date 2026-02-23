@@ -1,5 +1,19 @@
 data_dir = "/var/lib/vector"
 
+[enrichment_tables.geoip_mmdb]
+type = "geoip"
+path = "/etc/vector/enrichment/GeoLite2-City.mmdb"
+
+[enrichment_tables.geoip_csv]
+type = "file"
+file.path = "/etc/vector/enrichment/geoip.csv"
+file.encoding.type = "csv"
+
+[enrichment_tables.threat_intel]
+type = "file"
+file.path = "/etc/vector/enrichment/threat_intel.csv"
+file.encoding.type = "csv"
+
 [sources.core_banking]
 type = "file"
 include = ["/logs/core_banking.jsonl"]
@@ -24,6 +38,65 @@ read_from = "beginning"
 type = "file"
 include = ["/logs/linux_syslog.log"]
 read_from = "beginning"
+
+# Firewall / IDS logs (CEF or JSON)
+[sources.firewall_cef]
+type = "file"
+include = ["/logs/firewall_ids.cef"]
+read_from = "beginning"
+
+[sources.firewall_json]
+type = "file"
+include = ["/logs/firewall_ids.jsonl"]
+read_from = "beginning"
+
+# VPN auth logs (syslog format)
+[sources.vpn_syslog]
+type = "file"
+include = ["/logs/vpn_auth.log"]
+read_from = "beginning"
+
+# Cloud logs (file-based for testing)
+[sources.aws_cloudtrail_file]
+type = "file"
+include = ["/logs/aws_cloudtrail.jsonl"]
+read_from = "beginning"
+
+[sources.azure_activity_file]
+type = "file"
+include = ["/logs/azure_activity.jsonl"]
+read_from = "beginning"
+
+[sources.gcp_audit_file]
+type = "file"
+include = ["/logs/gcp_audit.jsonl"]
+read_from = "beginning"
+
+# Mainframe (z/OS) converted JSON
+[sources.mainframe_zos]
+type = "file"
+include = ["/logs/mainframe_zos.jsonl"]
+read_from = "beginning"
+
+# Cloud sources (templates) — uncomment and set credentials/queues when ready
+# [sources.aws_cloudtrail]
+# type = "aws_s3"
+# bucket = "REPLACE_ME"
+# region = "us-east-1"
+# compression = "auto"
+# sqs.queue_url = "REPLACE_ME"
+# sqs.polling.wait_time_seconds = 20
+# sqs.polling.max_number_of_messages = 10
+# sqs.visibility_timeout_secs = 300
+#
+# [sources.azure_activity]
+# type = "http_server"
+# address = "0.0.0.0:8088"
+#
+# [sources.gcp_audit]
+# type = "gcp_pubsub"
+# project = "REPLACE_ME"
+# subscription = "REPLACE_ME"
 
 [sources.windows_events]
 type = "file"
@@ -173,7 +246,185 @@ if is_timestamp(.timestamp) {
 .ecs.version = "8.11.0"
 .host.hostname = .hostname
 .process.name = .appname
+if !exists(.source.ip) { .source.ip = "127.0.0.1" }
 .log.level = "info"
+"""
+
+[transforms.firewall_cef_parse]
+type = "remap"
+inputs = ["firewall_cef"]
+source = """
+. = parse_cef!(.message)
+"""
+
+[transforms.firewall_cef_norm]
+type = "remap"
+inputs = ["firewall_cef_parse"]
+source = """
+.@timestamp = now()
+.event.kind = "event"
+.event.category = ["network", "intrusion_detection"]
+.event.action = .name
+.event.type = ["cef"]
+.event.dataset = "firewall_ids"
+.ecs.version = "8.11.0"
+src_ip, src_err = get(.extensions, ["src"])
+dst_ip, dst_err = get(.extensions, ["dst"])
+if src_err == null { .source.ip = to_string!(src_ip) }
+if dst_err == null { .destination.ip = to_string!(dst_ip) }
+.log.level = "warning"
+"""
+
+[transforms.firewall_json_parse]
+type = "remap"
+inputs = ["firewall_json"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.firewall_json_norm]
+type = "remap"
+inputs = ["firewall_json_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["network", "intrusion_detection"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "firewall_ids"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.destination.ip = .dest_ip
+.user.name = .user
+.log.level = .level
+"""
+
+[transforms.vpn_syslog_parse]
+type = "remap"
+inputs = ["vpn_syslog"]
+source = """
+parsed = parse_syslog!(.message)
+. = parsed
+.message = parsed.msg
+"""
+
+[transforms.vpn_syslog_norm]
+type = "remap"
+inputs = ["vpn_syslog_parse"]
+source = """
+if is_timestamp(.timestamp) {
+	.@timestamp = .timestamp
+} else {
+	.@timestamp = parse_timestamp!(.timestamp, "%+")
+}
+.event.kind = "event"
+.event.category = ["authentication", "network"]
+.event.action = .appname
+.event.type = ["syslog"]
+.event.dataset = "vpn_auth"
+.ecs.version = "8.11.0"
+.host.hostname = .hostname
+.process.name = .appname
+if !exists(.source.ip) { .source.ip = "127.0.0.1" }
+.log.level = "info"
+"""
+
+[transforms.aws_cloudtrail_parse]
+type = "remap"
+inputs = ["aws_cloudtrail_file"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.aws_cloudtrail_norm]
+type = "remap"
+inputs = ["aws_cloudtrail_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["cloud"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "aws_cloudtrail"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.user.name = .user
+.cloud.provider = "aws"
+.cloud.region = .region
+.log.level = .level
+"""
+
+[transforms.azure_activity_parse]
+type = "remap"
+inputs = ["azure_activity_file"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.azure_activity_norm]
+type = "remap"
+inputs = ["azure_activity_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["cloud"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "azure_activity"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.user.name = .user
+.cloud.provider = "azure"
+.cloud.region = .region
+.log.level = .level
+"""
+
+[transforms.gcp_audit_parse]
+type = "remap"
+inputs = ["gcp_audit_file"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.gcp_audit_norm]
+type = "remap"
+inputs = ["gcp_audit_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["cloud"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "gcp_audit"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.user.name = .user
+.cloud.provider = "gcp"
+.cloud.region = .region
+.log.level = .level
+"""
+
+[transforms.mainframe_parse]
+type = "remap"
+inputs = ["mainframe_zos"]
+source = """
+. = parse_json!(.message)
+"""
+
+[transforms.mainframe_norm]
+type = "remap"
+inputs = ["mainframe_parse"]
+source = """
+.@timestamp = parse_timestamp!(.timestamp, "%+")
+.event.kind = "event"
+.event.category = ["host", "audit"]
+.event.action = .action
+.event.type = [string!(.event_type)]
+.event.dataset = "mainframe_zos"
+.ecs.version = "8.11.0"
+.source.ip = .src_ip
+.user.name = .user
+.log.level = .level
 """
 
 [transforms.windows_xml_parse]
@@ -236,32 +487,30 @@ inputs = [
 	"linux_syslog_norm",
 	"windows_xml_norm",
 	"ad_xml_norm",
+	"firewall_cef_norm",
+	"firewall_json_norm",
+	"vpn_syslog_norm",
+	"aws_cloudtrail_norm",
+	"azure_activity_norm",
+	"gcp_audit_norm",
+	"mainframe_norm",
 ]
 source = """
-geo_lookup = {
-	"198.51.100.10": {"country_name": "US", "city_name": "New York", "location": {"lat": 40.7128, "lon": -74.0060}},
-	"198.51.100.12": {"country_name": "US", "city_name": "Chicago", "location": {"lat": 41.8781, "lon": -87.6298}},
-	"198.51.100.14": {"country_name": "US", "city_name": "San Francisco", "location": {"lat": 37.7749, "lon": -122.4194}},
-	"203.0.113.20": {"country_name": "GB", "city_name": "London", "location": {"lat": 51.5072, "lon": -0.1276}},
-	"203.0.113.23": {"country_name": "DE", "city_name": "Berlin", "location": {"lat": 52.5200, "lon": 13.4050}},
-	"203.0.113.25": {"country_name": "FR", "city_name": "Paris", "location": {"lat": 48.8566, "lon": 2.3522}},
-	"203.0.113.40": {"country_name": "IN", "city_name": "Mumbai", "location": {"lat": 19.0760, "lon": 72.8777}},
-	"203.0.113.50": {"country_name": "US", "city_name": "Seattle", "location": {"lat": 47.6062, "lon": -122.3321}},
-	"203.0.113.60": {"country_name": "US", "city_name": "Ashburn", "location": {"lat": 39.0438, "lon": -77.4874}},
-	"203.0.113.64": {"country_name": "US", "city_name": "Dallas", "location": {"lat": 32.7767, "lon": -96.7970}}
+geo_mmdb, geo_mmdb_err = get_enrichment_table_record("geoip_mmdb", {"ip": .source.ip})
+if geo_mmdb_err == null && geo_mmdb != null {
+	.geo = geo_mmdb
+} else {
+	geo_csv, geo_csv_err = get_enrichment_table_record("geoip_csv", {"ip": .source.ip})
+	if geo_csv_err == null && geo_csv != null {
+		.geo = {
+			"country_name": geo_csv.country,
+			"city_name": geo_csv.city,
+			"location": {"lat": geo_csv.lat, "lon": geo_csv.lon}
+		}
+	}
 }
-geo, geo_err = get(geo_lookup, [.source.ip])
-if geo_err == null && geo != null { .geo = geo }
 
-threat_lookup = {
-	"203.0.113.23": {"threat_type": "sql_injection", "confidence": 85, "source": "local_misp"},
-	"203.0.113.25": {"threat_type": "bruteforce", "confidence": 80, "source": "local_misp"},
-	"203.0.113.42": {"threat_type": "ssh_bruteforce", "confidence": 75, "source": "abuseipdb_cache"},
-	"203.0.113.54": {"threat_type": "pass_the_hash", "confidence": 90, "source": "local_misp"},
-	"203.0.113.56": {"threat_type": "powershell_obfuscation", "confidence": 88, "source": "local_misp"},
-	"203.0.113.63": {"threat_type": "kerberos_attack", "confidence": 82, "source": "local_misp"}
-}
-ti, ti_err = get(threat_lookup, [.source.ip])
+ti, ti_err = get_enrichment_table_record("threat_intel", {"ip": .source.ip})
 if ti_err == null && ti != null {
 	.threat = {
 		"indicator": {

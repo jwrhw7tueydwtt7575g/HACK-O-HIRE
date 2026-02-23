@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import json
-from datetime import datetime, timezone
+import random
+from datetime import datetime, timezone, timedelta
 
 JSON_OUTPUT = "../logs/api_web.jsonl"
 CEF_OUTPUT = "../logs/api_web.cef"
 
 base_time = datetime(2026, 2, 20, 9, 0, 0, tzinfo=timezone.utc)
 
-json_events = [
+base_json_events = [
     {
         "timestamp": base_time.isoformat(),
         "event_type": "access",
@@ -151,7 +152,7 @@ json_events = [
     },
 ]
 
-cef_events = [
+base_cef_events = [
     {
         "timestamp": base_time.replace(minute=1).isoformat(),
         "cef": "CEF:0|BankPortal|WAF|2.1|1001|REST access|3|src=203.0.113.20 dst=192.0.2.10 spt=52314 dpt=443 requestMethod=GET request=/api/v1/accounts msg=REST access success",
@@ -194,13 +195,28 @@ cef_events = [
     },
 ]
 
+def build_json_event(template, ts):
+    event = dict(template)
+    event["timestamp"] = ts.isoformat()
+    if "bytes" in event:
+        event["bytes"] = int(event["bytes"] * random.uniform(0.5, 1.8))
+    return event
+
+json_events = []
+for i in range(50):
+    template = random.choice(base_json_events)
+    ts = base_time + timedelta(minutes=i)
+    json_events.append(build_json_event(template, ts))
+
+cef_events = [random.choice(base_cef_events)["cef"] for _ in range(50)]
+
 with open(JSON_OUTPUT, "w", encoding="utf-8") as f:
     for event in json_events:
         f.write(json.dumps(event) + "\n")
 
 with open(CEF_OUTPUT, "w", encoding="utf-8") as f:
-    for event in cef_events:
-        f.write(event["cef"] + "\n")
+    for line in cef_events:
+        f.write(line + "\n")
 
 print(f"Wrote {len(json_events)} JSON events to {JSON_OUTPUT}")
 print(f"Wrote {len(cef_events)} CEF events to {CEF_OUTPUT}")

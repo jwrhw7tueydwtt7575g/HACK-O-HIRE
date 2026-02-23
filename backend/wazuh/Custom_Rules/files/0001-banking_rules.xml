@@ -1,0 +1,90 @@
+<!-- ============================================================
+     CUSTOM RULES: Core Banking
+     File: 0001-banking_rules.xml
+     These rules do NOT exist in Wazuh by default.
+     Covers: fraud, transfers, MFA, privileged ops, after-hours
+     ============================================================ -->
+
+<group name="local,custom">
+
+  <!-- ── Base parent rule (all banking events must match this) ── -->
+  <rule id="100001" level="3">
+    <field name="event.dataset">core_banking</field>
+    <description>Core Banking: Event received</description>
+    <group>banking</group>
+  </rule>
+
+  <!-- ── Fraud Flagged Transaction ── -->
+  <rule id="100002" level="12">
+    <if_sid>100001</if_sid>
+    <field name="fraud_flag">true</field>
+    <description>Core Banking: Fraud flagged transaction detected</description>
+    <group>banking,fraud,gdpr,pci_dss</group>
+  </rule>
+
+  <!-- ── Large Transfer (6+ digit amount) ── -->
+  <rule id="100003" level="12">
+    <if_sid>100001</if_sid>
+    <field name="event.action">transfer_initiated|transfer_completed</field>
+    <field name="amount" type="pcre2">^[0-9]{6,}</field>
+    <description>Core Banking: Large transfer above threshold detected</description>
+    <group>banking,fraud,pci_dss</group>
+  </rule>
+
+  <!-- ── Limit Override ── -->
+  <rule id="100004" level="13">
+    <if_sid>100001</if_sid>
+    <field name="event.action">limit_override</field>
+    <description>Core Banking: Transaction limit override performed</description>
+    <group>banking,fraud,privilege_escalation</group>
+  </rule>
+
+  <!-- ── Limit Override After Hours ── -->
+  <rule id="100005" level="14">
+    <if_sid>100004</if_sid>
+    <field name="after_hours">true</field>
+    <description>Core Banking: Limit override performed AFTER HOURS</description>
+    <group>banking,fraud,after_hours</group>
+  </rule>
+
+  <!-- ── MFA Failure ── -->
+  <rule id="100006" level="11">
+    <if_sid>100001</if_sid>
+    <field name="event.action">mfa_failed</field>
+    <description>Core Banking: MFA authentication failure</description>
+    <group>banking,auth,mfa</group>
+  </rule>
+
+  <!-- ── Login Failed ── -->
+  <rule id="100007" level="10">
+    <if_sid>100001</if_sid>
+    <field name="event.action">login_failed</field>
+    <description>Core Banking: Failed login attempt</description>
+    <group>banking,auth</group>
+  </rule>
+
+  <!-- ── Role Change (Privilege Escalation) ── -->
+  <rule id="100008" level="13">
+    <if_sid>100001</if_sid>
+    <field name="event.action">role_change</field>
+    <description>Core Banking: User role changed - possible privilege escalation</description>
+    <group>banking,privilege_escalation</group>
+  </rule>
+
+  <!-- ── Fraud + Large Transfer COMBINED ── -->
+  <rule id="100009" level="15">
+    <if_sid>100002</if_sid>
+    <field name="amount" type="pcre2">^[0-9]{6,}</field>
+    <description>CRITICAL: Fraudulent large transfer detected</description>
+    <group>banking,fraud,critical</group>
+  </rule>
+
+  <!-- ── Fraud + After Hours COMBINED ── -->
+  <rule id="100010" level="15">
+    <if_sid>100002</if_sid>
+    <field name="after_hours">true</field>
+    <description>CRITICAL: Fraudulent transaction detected AFTER HOURS</description>
+    <group>banking,fraud,after_hours,critical</group>
+  </rule>
+
+</group>

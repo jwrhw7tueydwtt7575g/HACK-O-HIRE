@@ -1,0 +1,179 @@
+<!-- ============================================================
+     CUSTOM RULES: Cross-Dataset Correlation Rules
+     File: 0006-correlation_rules.xml
+     These rules do NOT exist in Wazuh by default.
+     Wazuh's built-in correlations only work within single
+     log sources. These span banking + DB + geo + threat intel.
+     
+     IMPORTANT: Load this file LAST (highest number) so all
+     parent rule IDs (100001-100409) are already registered.
+     ============================================================ -->
+
+<group name="local,custom">
+
+  <!-- ══════════════════════════════════════════════════════════
+       CREDENTIAL COMPROMISE CHAIN
+       ══════════════════════════════════════════════════════════ -->
+
+  <!-- Brute force followed by successful login (same IP, 5 min window) -->
+  <rule id="100500" level="15" timeframe="300" frequency="2">
+    <if_matched_sid>100402</if_matched_sid>
+    <field name="event.outcome">success</field>
+    <same_field>src</same_field>
+    <description>CRITICAL CORRELATION: Brute force followed by successful login - credential compromise</description>
+    <group>correlation,credential_compromise,critical</group>
+  </rule>
+
+  <!-- Known malicious IP successfully authenticated anywhere -->
+  <rule id="100501" level="15" timeframe="300" frequency="2">
+    <if_matched_sid>100100</if_matched_sid>
+    <field name="event.outcome">success</field>
+    <same_field>source.ip</same_field>
+    <description>CRITICAL CORRELATION: Threat intel malicious IP successfully authenticated</description>
+    <group>correlation,threat_intel,credential_compromise,critical</group>
+  </rule>
+
+  <!-- MFA failure then successful login (banking) -->
+  <rule id="100502" level="15" timeframe="600" frequency="2">
+    <if_matched_sid>100006</if_matched_sid>
+    <field name="event.action">login_success</field>
+    <field name="event.dataset">core_banking</field>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: MFA failure followed by successful banking login - MFA bypass suspected</description>
+    <group>correlation,banking,mfa,credential_compromise,critical</group>
+  </rule>
+
+  <!-- ══════════════════════════════════════════════════════════
+       DATA BREACH CHAIN
+       ══════════════════════════════════════════════════════════ -->
+
+  <!-- SQL injection then bulk database export -->
+  <rule id="100503" level="15" timeframe="600" frequency="2">
+    <if_matched_sid>100401</if_matched_sid>
+    <if_matched_sid>100201</if_matched_sid>
+    <description>CRITICAL CORRELATION: SQL injection followed by bulk export - active data breach</description>
+    <group>correlation,data_breach,sqli,exfiltration,critical</group>
+  </rule>
+
+  <!-- Off-hours schema change then bulk export -->
+  <rule id="100504" level="15" timeframe="3600" frequency="2">
+    <if_matched_sid>100204</if_matched_sid>
+    <if_matched_sid>100201</if_matched_sid>
+    <description>CRITICAL CORRELATION: Off-hours schema change followed by bulk export - insider threat or breach</description>
+    <group>correlation,data_breach,insider_threat,critical</group>
+  </rule>
+
+  <!-- Privilege grant then bulk export (same session) -->
+  <rule id="100505" level="15" timeframe="1800" frequency="2">
+    <if_matched_sid>100207</if_matched_sid>
+    <if_matched_sid>100201</if_matched_sid>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: Privilege grant followed by bulk export by same user</description>
+    <group>correlation,data_breach,privilege_escalation,critical</group>
+  </rule>
+
+  <!-- ══════════════════════════════════════════════════════════
+       LATERAL MOVEMENT CHAIN
+       ══════════════════════════════════════════════════════════ -->
+
+  <!-- Pass-the-hash then RDP logon -->
+  <rule id="100506" level="15" timeframe="300" frequency="2">
+    <if_matched_sid>100104</if_matched_sid>
+    <field name="event.action">rdp_logon</field>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: Pass-the-hash followed by RDP - active lateral movement</description>
+    <group>correlation,lateral_movement,windows,critical</group>
+  </rule>
+
+  <!-- Kerberos attack then privileged logon -->
+  <rule id="100507" level="15" timeframe="600" frequency="2">
+    <if_matched_sid>100106</if_matched_sid>
+    <field name="event.action">privileged_logon</field>
+    <description>CRITICAL CORRELATION: Kerberos attack followed by privileged logon - Golden Ticket suspected</description>
+    <group>correlation,lateral_movement,kerberos,critical</group>
+  </rule>
+
+  <!-- PowerShell obfuscation then service install -->
+  <rule id="100508" level="15" timeframe="600" frequency="2">
+    <if_matched_sid>100105</if_matched_sid>
+    <field name="event.action">service_install</field>
+    <description>CRITICAL CORRELATION: PowerShell obfuscation followed by service install - malware persistence</description>
+    <group>correlation,persistence,defense_evasion,critical</group>
+  </rule>
+
+  <!-- ══════════════════════════════════════════════════════════
+       FINANCIAL FRAUD CHAIN
+       ══════════════════════════════════════════════════════════ -->
+
+  <!-- Fraud flag + high-risk geo + large transfer -->
+  <rule id="100509" level="15" timeframe="300" frequency="2">
+    <if_matched_sid>100303</if_matched_sid>
+    <if_matched_sid>100003</if_matched_sid>
+    <same_field>source.ip</same_field>
+    <description>CRITICAL CORRELATION: Large fraudulent transfer from high-risk country</description>
+    <group>correlation,banking,fraud,geo,critical</group>
+  </rule>
+
+  <!-- Limit override + fraud flag -->
+  <rule id="100510" level="15" timeframe="600" frequency="2">
+    <if_matched_sid>100004</if_matched_sid>
+    <if_matched_sid>100002</if_matched_sid>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: Limit override followed by fraudulent transaction by same user</description>
+    <group>correlation,banking,fraud,insider_threat,critical</group>
+  </rule>
+
+  <!-- Role change + large transfer (same user, short window) -->
+  <rule id="100511" level="15" timeframe="900" frequency="2">
+    <if_matched_sid>100008</if_matched_sid>
+    <if_matched_sid>100003</if_matched_sid>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: Role change followed by large transfer by same user - insider fraud</description>
+    <group>correlation,banking,fraud,privilege_escalation,critical</group>
+  </rule>
+
+  <!-- ══════════════════════════════════════════════════════════
+       ACCOUNT TAKEOVER CHAIN
+       ══════════════════════════════════════════════════════════ -->
+
+  <!-- AD account lockout then successful login (impossible without reset) -->
+  <rule id="100512" level="15" timeframe="1800" frequency="2">
+    <if_matched_sid>100305</if_matched_sid>
+    <field name="event.action">logon</field>
+    <field name="event.outcome">success</field>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: Account lockout followed by successful logon - account takeover suspected</description>
+    <group>correlation,account_takeover,critical</group>
+  </rule>
+
+  <!-- New user created + immediately added to admin group -->
+  <rule id="100513" level="15" timeframe="300" frequency="2">
+    <if_matched_sid>100306</if_matched_sid>
+    <field name="event.action">group_member_added</field>
+    <same_field>user.name</same_field>
+    <description>CRITICAL CORRELATION: New user immediately added to privileged group - backdoor account suspected</description>
+    <group>correlation,account_takeover,privilege_escalation,critical</group>
+  </rule>
+
+  <!-- ══════════════════════════════════════════════════════════
+       MULTI-VECTOR ATTACK
+       ══════════════════════════════════════════════════════════ -->
+
+  <!-- Threat intel + geo anomaly + banking access -->
+  <rule id="100514" level="15" timeframe="300" frequency="2">
+    <if_matched_sid>100109</if_matched_sid>
+    <if_matched_sid>100302</if_matched_sid>
+    <same_field>source.ip</same_field>
+    <description>CRITICAL CORRELATION: Threat intel + geo anomaly + banking access - coordinated attack</description>
+    <group>correlation,multi_vector,banking,critical</group>
+  </rule>
+
+  <!-- WAF attack + database attack same timeframe -->
+  <rule id="100515" level="15" timeframe="600" frequency="2">
+    <if_matched_sid>100401</if_matched_sid>
+    <if_matched_sid>100211</if_matched_sid>
+    <description>CRITICAL CORRELATION: WAF SQLi + suspicious database login - coordinated intrusion attempt</description>
+    <group>correlation,multi_vector,attack,critical</group>
+  </rule>
+
+</group>

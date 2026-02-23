@@ -1,0 +1,91 @@
+<!-- ============================================================
+     CUSTOM RULES: Threat Intelligence Matching
+     File: 0002-threat_intel_rules.xml
+     These rules do NOT exist in Wazuh by default.
+     Covers: malicious IPs, attack types from threat intel feed
+     Vector enriches logs with threat.indicator fields — Wazuh
+     matches on those enriched fields here.
+     ============================================================ -->
+
+<group name="local,custom">
+
+  <!-- ── Base: Any threat intel hit ── -->
+  <rule id="100100" level="14">
+    <field name="threat.indicator.type">ipv4-addr</field>
+    <description>Threat Intel: Known malicious IP detected</description>
+    <group>threat_intel</group>
+  </rule>
+
+  <!-- ── SQL Injection from known threat actor ── -->
+  <rule id="100101" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.indicator.name">sql_injection</field>
+    <description>CRITICAL: Threat intel confirmed SQL injection source IP</description>
+    <group>threat_intel,attack,sqli</group>
+  </rule>
+
+  <!-- ── Brute Force from known threat actor ── -->
+  <rule id="100102" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.indicator.name">bruteforce</field>
+    <description>CRITICAL: Threat intel confirmed brute force source IP</description>
+    <group>threat_intel,attack,bruteforce</group>
+  </rule>
+
+  <!-- ── SSH Brute Force from known threat actor ── -->
+  <rule id="100103" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.indicator.name">ssh_bruteforce</field>
+    <description>CRITICAL: Threat intel confirmed SSH brute force source IP</description>
+    <group>threat_intel,attack,ssh,bruteforce</group>
+  </rule>
+
+  <!-- ── Pass the Hash from known threat actor ── -->
+  <rule id="100104" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.indicator.name">pass_the_hash</field>
+    <description>CRITICAL: Threat intel confirmed pass-the-hash source IP</description>
+    <group>threat_intel,attack,lateral_movement</group>
+  </rule>
+
+  <!-- ── PowerShell Obfuscation from known threat actor ── -->
+  <rule id="100105" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.indicator.name">powershell_obfuscation</field>
+    <description>CRITICAL: Threat intel confirmed PowerShell obfuscation source IP</description>
+    <group>threat_intel,attack,defense_evasion</group>
+  </rule>
+
+  <!-- ── Kerberos Attack from known threat actor ── -->
+  <rule id="100106" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.indicator.name">kerberos_attack</field>
+    <description>CRITICAL: Threat intel confirmed Kerberos attack source IP - possible Golden Ticket</description>
+    <group>threat_intel,attack,kerberos</group>
+  </rule>
+
+  <!-- ── High confidence threat intel (90+) ── -->
+  <rule id="100107" level="15">
+    <if_sid>100100</if_sid>
+    <field name="threat.confidence" type="pcre2">^9[0-9]$|^100$</field>
+    <description>CRITICAL: Very high confidence threat intel hit (90%+ confidence)</description>
+    <group>threat_intel,high_confidence</group>
+  </rule>
+
+  <!-- ── Threat intel hit with successful outcome ── -->
+  <rule id="100108" level="15">
+    <if_sid>100100</if_sid>
+    <field name="event.outcome">success</field>
+    <description>CRITICAL: Known malicious IP successfully performed an action</description>
+    <group>threat_intel,critical,compromise</group>
+  </rule>
+
+  <!-- ── Threat intel hit on banking dataset ── -->
+  <rule id="100109" level="15">
+    <if_sid>100100</if_sid>
+    <field name="event.dataset">core_banking</field>
+    <description>CRITICAL: Known malicious IP accessing core banking system</description>
+    <group>threat_intel,banking,critical</group>
+  </rule>
+
+</group>

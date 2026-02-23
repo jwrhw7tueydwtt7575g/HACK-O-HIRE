@@ -1,0 +1,99 @@
+<!-- ============================================================
+     CUSTOM RULES: WAF / CEF Events (BankPortal WAF)
+     File: 0005-waf_cef_rules.xml
+     These rules do NOT exist in Wazuh by default.
+     Your BankPortal WAF emits CEF format logs.
+     Vector parses them and normalizes to ECS fields.
+     Wazuh has no knowledge of this WAF or its event types.
+     ============================================================ -->
+
+<group name="local,custom">
+
+  <!-- ── Base: Any CEF/WAF event ── -->
+  <rule id="100400" level="3">
+    <field name="event.type">cef</field>
+    <description>WAF: CEF format event received from BankPortal WAF</description>
+    <group>waf</group>
+  </rule>
+
+  <!-- ── SQL Injection detected by WAF ── -->
+  <rule id="100401" level="14">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)sqli|sql.inject</field>
+    <description>WAF: SQL injection pattern detected and logged by WAF</description>
+    <group>waf,attack,sqli</group>
+  </rule>
+
+  <!-- ── Brute Force detected by WAF ── -->
+  <rule id="100402" level="13">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)brute.force|brute</field>
+    <description>WAF: Brute force attack detected by WAF</description>
+    <group>waf,attack,bruteforce</group>
+  </rule>
+
+  <!-- ── Parameter Tampering detected by WAF ── -->
+  <rule id="100403" level="13">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)param.tamper|parameter</field>
+    <description>WAF: Parameter tampering detected by WAF</description>
+    <group>waf,attack,tampering</group>
+  </rule>
+
+  <!-- ── Abnormal Payload / Upload Anomaly ── -->
+  <rule id="100404" level="12">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)payload.anomaly|payload</field>
+    <description>WAF: Abnormal payload size detected - possible data exfiltration or DoS</description>
+    <group>waf,attack,anomaly</group>
+  </rule>
+
+  <!-- ── Failed Authentication via WAF ── -->
+  <rule id="100405" level="11">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)failed.auth|auth.fail</field>
+    <description>WAF: Failed authentication event logged by WAF</description>
+    <group>waf,auth</group>
+  </rule>
+
+  <!-- ── Rate Limit Exceeded ── -->
+  <rule id="100406" level="11">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)rate.limit</field>
+    <description>WAF: Rate limit exceeded - possible automated attack or scraping</description>
+    <group>waf,attack,ratelimit</group>
+  </rule>
+
+  <!-- ── High severity WAF event (severity 8-9) ── -->
+  <rule id="100407" level="14">
+    <if_sid>100400</if_sid>
+    <field name="severity" type="pcre2">^[89]$</field>
+    <description>WAF: High severity event (8-9) detected by BankPortal WAF</description>
+    <group>waf,high_severity</group>
+  </rule>
+
+  <!-- ── WAF event + threat intel hit on same IP ── -->
+  <rule id="100408" level="15">
+    <if_sid>100400</if_sid>
+    <field name="threat.indicator.type">ipv4-addr</field>
+    <description>CRITICAL: WAF event from known malicious IP (threat intel confirmed)</description>
+    <group>waf,threat_intel,critical</group>
+  </rule>
+
+  <!-- ── SQLi WAF hit + threat intel ── -->
+  <rule id="100409" level="15">
+    <if_sid>100401</if_sid>
+    <field name="threat.indicator.name">sql_injection</field>
+    <description>CRITICAL: WAF SQLi + threat intel confirmed - active SQL injection attack</description>
+    <group>waf,attack,sqli,threat_intel,critical</group>
+  </rule>
+
+  <!-- ── Admin delete action via WAF ── -->
+  <rule id="100410" level="12">
+    <if_sid>100400</if_sid>
+    <field name="event.action" type="pcre2">(?i)admin.delete|admin</field>
+    <description>WAF: Admin-level delete action logged by WAF</description>
+    <group>waf,admin,suspicious</group>
+  </rule>
+
+</group>

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import json
-from datetime import datetime, timezone
+import random
+from datetime import datetime, timezone, timedelta
 
 OUTPUT_PATH = "../logs/databases.jsonl"
 
 base_time = datetime(2026, 2, 20, 10, 0, 0, tzinfo=timezone.utc)
 
-events = [
+base_events = [
     {
         "timestamp": base_time.isoformat(),
         "event_type": "query",
@@ -131,6 +132,19 @@ events = [
         "level": "info",
     },
 ]
+
+def build_event(template, ts):
+    event = dict(template)
+    event["timestamp"] = ts.isoformat()
+    if "rows" in event:
+        event["rows"] = int(event["rows"] * random.uniform(0.5, 2.0))
+    return event
+
+events = []
+for i in range(50):
+    template = random.choice(base_events)
+    ts = base_time + timedelta(minutes=i)
+    events.append(build_event(template, ts))
 
 with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
     for event in events:
