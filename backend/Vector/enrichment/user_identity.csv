@@ -1,6 +1,47 @@
-user_name,user_id,display_name,department
-jdoe,UID-1001,John Doe,IT
-asmith,UID-1002,Alice Smith,Finance
-bpatel,UID-1003,Bhavin Patel,Risk
-mjones,UID-1004,Mary Jones,Security
-svc_backup,UID-9001,Backup Service,Operations
+user_name,user_id,department,role
+jdoe,EMP-1001,IT,user
+asmith,EMP-1002,Finance,user
+bpatel,EMP-1003,Risk,user
+mjones,EMP-1004,Security,user
+fraud_ops,EMP-1042,fraud,analyst
+dba_admin,EMP-0017,dba,admin
+admin1,EMP-0031,it_admin,admin
+newuser,EMP-0099,unknown,user
+aad-admin,EMP-0012,cloud_ops,admin
+ops,EMP-0044,operations,analyst
+alice,EMP-1005,operations,user
+bob,EMP-1006,operations,user
+carol,EMP-1007,operations,user
+dave,EMP-1008,operations,user
+admin,EMP-1009,it_admin,admin
+audit,EMP-1010,security,analyst
+developer,EMP-1011,development,user
+teller-02,EMP-1012,banking,teller
+teller-04,EMP-1013,banking,teller
+etl_user,SVC-0003,data,service
+reporting,SVC-0011,reporting,service
+svc-batch,SVC-0001,core_banking,service
+partner-api,SVC-0007,api,service
+svc-app,SVC-0009,infrastructure,service
+svc-rdp,SVC-0021,infrastructure,service
+terraform,SVC-0015,devops,service
+svc_backup,SVC-9001,operations,service
+svc-admin,SVC-9002,it_admin,service
+svc-transfer,SVC-9003,core_banking,service
+svc-deploy,SVC-9004,devops,service
+system,SVC-9005,infrastructure,service
+monitoring,SVC-9006,infrastructure,service
+admin-portal,SVC-9007,api,service
+ci-bot,SVC-9008,devops,service
+gcp-admin,SVC-9009,cloud_ops,service
+secops,SVC-9010,security,service
+mf-user1,EMP-1014,mainframe,user
+mf-batch,SVC-9011,mainframe,service
+mf-ops,SVC-9012,mainframe,service
+mf-analyst,SVC-9013,mainframe,service
+unknown,UNKNOWN,unknown,unknown
+client-app,SVC-9014,api,service
+admin2,EMP-1015,it_admin,admin
+temp_user,EMP-1016,unknown,user
+root,SVC-9015,infrastructure,service
+powershell,SVC-9016,infrastructure,service
